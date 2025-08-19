@@ -1,26 +1,20 @@
-import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@8.0.0/+esm';
+import { set, get } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/+esm';
 import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
 
 export default class SendingModel {
     async init() {
-        this.db = await openDB('sendy-blaster', 1, {
-            upgrade(db) {
-                db.createObjectStore('config', { keyPath: 'id' });
-            }
-        });
+        // No explicit initialization needed; idb-keyval manages the database
     }
 
     async set(config) {
         if (!config.apiKey || !config.domain) {
             throw new Error('Invalid configuration');
         }
-        const tx = this.db.transaction('config', 'readwrite');
-        await tx.objectStore('config').put({ id: 1, ...config });
-        await tx.done;
+        await set('config', { id: 1, ...config });
     }
 
     async get() {
-        const config = await this.db.transaction('config').objectStore('config').get(1);
+        const config = await get('config');
         return config || { apiKey: '', domain: '' };
     }
 

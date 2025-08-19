@@ -1,13 +1,9 @@
-import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@8.0.0/+esm';
+import { set, get, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/+esm';
 import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
 
 export default class TemplatesModel {
     async init() {
-        this.db = await openDB('sendy-blaster', 1, {
-            upgrade(db) {
-                db.createObjectStore('templates', { keyPath: 'id' });
-            }
-        });
+        // No explicit initialization needed; idb-keyval manages the database
     }
 
     async loadJSON(file) {
@@ -21,13 +17,11 @@ export default class TemplatesModel {
     }
 
     async set(template) {
-        const tx = this.db.transaction('templates', 'readwrite');
-        await tx.objectStore('templates').put({ id: 1, ...template });
-        await tx.done;
+        await set('template', { id: 1, ...template });
     }
 
     async get() {
-        const template = await this.db.transaction('templates').objectStore('templates').get(1);
+        const template = await get('template');
         return template || {
             sender_name: '',
             sender_email: '',
@@ -64,8 +58,6 @@ export default class TemplatesModel {
     }
 
     async clear() {
-        const tx = this.db.transaction('templates', 'readwrite');
-        await tx.objectStore('templates').clear();
-        await tx.done;
+        await del('template');
     }
 }

@@ -15,14 +15,25 @@ let sentCount = 0;
 let totalContacts = 0;
 
 async function init() {
-    await Promise.all([
-        contactsModel.init(),
-        templatesModel.init(),
-        sendingModel.init()
-    ]);
-    setupEventListeners();
-    await refreshMain();
-    await refreshTemplateView();
+    try {
+        // Await all model initializations
+        await Promise.all([
+            contactsModel.init(),
+            templatesModel.init(),
+            sendingModel.init()
+        ]);
+        console.log('All models initialized successfully');
+
+        // Set up event listeners and refresh views
+        setupEventListeners();
+        await Promise.all([
+            refreshMain(),
+            refreshTemplateView()
+        ]);
+    } catch (error) {
+        console.error('Initialization failed:', error);
+        showError('Failed to initialize application: ' + error.message);
+    }
 }
 
 function setupEventListeners() {
@@ -43,6 +54,7 @@ function setupEventListeners() {
         try {
             await contactsModel.loadCSV(e.target.files[0]);
             await refreshMain();
+            await refreshTemplateView();
         } catch (err) {
             showError(err.message);
         }
@@ -94,28 +106,78 @@ function setupEventListeners() {
         }
     });
 
-    // Template view
-    document.getElementById('template-mapping').addEventListener('submit', async e => {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const template = {
-            sender_name: formData.get('sender_name'),
-            sender_email: formData.get('sender_email'),
-            subject: formData.get('subject'),
-            recipient_name: formData.get('recipient_name'),
-            recipient_email: formData.get('recipient_email'),
-            body: document.getElementById('template-text').value
-        };
-        try {
-            await templatesModel.set(template);
-            showError('Template saved');
-            await refreshMain();
-            await refreshTemplateView();
-        } catch (err) {
-            showError(err.message);
+    // Template view: Real-time saving and column buttons
+    const templateInputs = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'template-text'];
+    templateInputs.forEach(id => {
+        const input = document.getElementById(id);
+        input.addEventListener('input', async () => {
+            try {
+                const template = {
+                    sender_name: document.getElementById('sender_name').value,
+                    sender_email: document.getElementById('sender_email').value,
+                    subject: document.getElementById('subject').value,
+                    recipient_name: document.getElementById('recipient_name').value,
+                    recipient_email: document.getElementById('recipient_email').value,
+                    body: document.getElementById('template-text').value
+                };
+                await templatesModel.set(template);
+                await refreshTemplateView();
+            } catch (err) {
+                showError(err.message);
+            }
+        });
+    });
+
+    // Column buttons
+    document.getElementById('column-buttons').addEventListener('click', e => {
+        if (e.target.classList.contains('column-btn')) {
+            const column = e.target.dataset.column;
+            const activeElement = document.activeElement;
+            if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
+                const start = activeElement.selectionStart;
+                const end = activeElement.selectionEnd;
+                const value = activeElement.value;
+                activeElement.value = value.slice(0, start) + `{{${column}}}` + value.slice(end);
+                activeElement.selectionStart = activeElement.selectionEnd = start + column.length + 4;
+                activeElement.dispatchEvent(new Event('input')); // Trigger save and preview
+            }
         }
     });
 
+    // Mode and column dropdowns
+    document.querySelectorAll('.mode-select').forEach(select => {
+        select.addEventListener('change', async () => {
+            const field = select.dataset.field;
+            const input = document.getElementById(field);
+            const columnSelect = select.parentElement.querySelector('.column-select');
+            columnSelect.classList.toggle('d-none', select.value !== 'column');
+            if (select.value === 'column') {
+                const columns = await contactsModel.getColumns();
+                const currentValue = input.value.match(/^{{(.+)}}$/)?.[1];
+                columnSelect.innerHTML = columns.map(col =>
+                    `<option value="${col}" ${col === currentValue ? 'selected' : ''}>${col}</option>`
+                ).join('');
+                if (columns.length > 0 && !columns.includes(currentValue)) {
+                    input.value = `{{${columns[0]}}}`;
+                    input.dispatchEvent(new Event('input')); // Trigger save and preview
+                }
+            } else {
+                input.value = '';
+                input.dispatchEvent(new Event('input')); // Trigger save and preview
+            }
+        });
+    });
+
+    document.querySelectorAll('.column-select').forEach(select => {
+        select.addEventListener('change', () => {
+            const field = select.dataset.field;
+            const input = document.getElementById(field);
+            input.value = `{{${select.value}}}`;
+            input.dispatchEvent(new Event('input')); // Trigger save and preview
+        });
+    });
+
+    // Template view navigation
     document.getElementById('contact-prev').addEventListener('click', async () => {
         if (currentContactPage > 1) {
             currentContactPage--;
@@ -135,8 +197,7 @@ function setupEventListeners() {
     });
 
     // Sending card
-    document.getElementById('sending-config').addEventListener('submit', async e => {
-        e.preventDefault();
+    document.getElementById('sending-config').addEventListener('input', async e => {
         const formData = new FormData(e.target);
         const config = {
             apiKey: formData.get('apiKey'),
@@ -144,7 +205,6 @@ function setupEventListeners() {
         };
         try {
             await sendingModel.set(config);
-            showError('Configuration saved');
             await refreshMain();
         } catch (err) {
             showError(err.message);
@@ -188,7 +248,7 @@ async function switchView(view) {
     const breadcrumbs = document.getElementById('breadcrumbs');
     breadcrumbs.innerHTML = `
     <li class="breadcrumb-item"><a href="#" data-view="main">Sendy Blaster</a></li>
-    ${view === 'template' ? '<li class="breadcrumb-item active" aria-current="page">View/Edit Template</li>' : ''}
+    ${view === 'template' ? '<li class="breadcrumb-item active" aria-current="page">View/edit template</li>' : ''}
   `;
     if (view === 'main') await refreshMain();
     if (view === 'template') await refreshTemplateView();
@@ -198,23 +258,31 @@ async function refreshMain() {
     // Contacts card
     const { total } = await contactsModel.getPage(1, Number.MAX_SAFE_INTEGER);
     const contactsStatus = document.getElementById('contacts-status');
-    const contactsCount = document.getElementById('contacts-count');
     const contactsClear = document.getElementById('contacts-clear');
-    contactsStatus.textContent = total === 0 ? 'Contacts not yet loaded' : 'Contacts loaded';
-    contactsCount.textContent = `${total} contacts currently loaded`;
+    const contactsLoad = document.getElementById('contacts-load');
+    contactsStatus.textContent = total === 0 ? 'No contacts loaded' : `${total} contacts loaded`;
     contactsClear.classList.toggle('d-none', total === 0);
+    contactsLoad.classList.toggle('d-none', total !== 0);
 
     // Template card
     const template = await templatesModel.get();
     const templateStatus = document.getElementById('template-status');
     const templateClear = document.getElementById('template-clear');
+    const templateLoad = document.getElementById('template-load');
+    const templateUpload = document.getElementById('template-upload');
+    const templateEdit = document.getElementById('template-edit');
+    const templateDownload = document.getElementById('template-download');
+    const templateCard = document.getElementById('template-card');
     const isStarted = template.sender_name || template.sender_email || template.subject ||
         template.recipient_name || template.recipient_email || template.body;
     const isValid = template.sender_name && template.sender_email && template.subject &&
         template.recipient_name && template.recipient_email && template.body;
-    templateStatus.textContent = !isStarted ? 'Template not yet completed' :
-        isValid ? 'Template is ready to send' : 'Template started, but not yet passed validation';
+    templateStatus.textContent = !isStarted ? 'Template not started' :
+        isValid ? 'Template ready to send' : 'Template started but not complete';
     templateClear.classList.toggle('d-none', !isStarted);
+    templateDownload.classList.toggle('d-none', !isStarted);
+    templateCard.classList.toggle('disabled', total === 0);
+    templateCard.classList.toggle('opacity-50', total === 0);
 
     // Sending card
     const config = await sendingModel.get();
@@ -223,16 +291,19 @@ async function refreshMain() {
     const progressDiv = document.getElementById('sending-progress');
     const downloadBtn = document.getElementById('sending-download');
     const pauseBtn = document.getElementById('sending-pause');
+    const sendingCard = document.getElementById('sending-card');
     const isConfigValid = config.apiKey && config.domain;
     const canSend = total > 0 && isValid && isConfigValid;
     sendBtn.disabled = !canSend || sendingState !== 'idle';
-    sendBtn.innerHTML = sendingState === 'sending' ? '<span class="spinner-border spinner-border-sm"></span> Sending...' : 'Send Emails';
-    sendStatus.textContent = !canSend ? 'Disabled: Requires contacts, valid template, and Mailgun configuration' : '';
+    sendBtn.innerHTML = sendingState === 'sending' ? '<span class="spinner-border spinner-border-sm"></span> Sending...' : 'Send emails';
+    sendStatus.textContent = !canSend ? 'Disabled: requires contacts, valid template, and Mailgun configuration' : '';
     progressDiv.classList.toggle('d-none', sendingState === 'idle');
     downloadBtn.classList.toggle('d-none', sendingState === 'idle');
     pauseBtn.textContent = sendingState === 'paused' ? 'Resume' : 'Pause';
     pauseBtn.classList.toggle('btn-warning', sendingState !== 'paused');
     pauseBtn.classList.toggle('btn-success', sendingState === 'paused');
+    sendingCard.classList.toggle('disabled', total === 0 || !isValid);
+    sendingCard.classList.toggle('opacity-50', total === 0 || !isValid);
     if (sendingState !== 'idle') {
         document.getElementById('sending-progress-bar').style.width = `${(sentCount / totalContacts) * 100}%`;
     }
@@ -241,12 +312,40 @@ async function refreshMain() {
 async function refreshTemplateView() {
     const template = await templatesModel.get();
     document.getElementById('template-text').value = template.body || '';
-    const form = document.getElementById('template-mapping');
-    form.sender_name.value = template.sender_name || '';
-    form.sender_email.value = template.sender_email || '';
-    form.subject.value = template.subject || '';
-    form.recipient_name.value = template.recipient_name || '';
-    form.recipient_email.value = template.recipient_email || '';
+    const inputs = {
+        sender_name: document.getElementById('sender_name'),
+        sender_email: document.getElementById('sender_email'),
+        subject: document.getElementById('subject'),
+        recipient_name: document.getElementById('recipient_name'),
+        recipient_email: document.getElementById('recipient_email')
+    };
+    Object.entries(inputs).forEach(([key, input]) => {
+        input.value = template[key] || '';
+    });
+
+    // Populate column buttons
+    const columns = await contactsModel.getColumns();
+    const columnButtons = document.getElementById('column-buttons');
+    columnButtons.innerHTML = columns.length > 0 ? columns.map(col =>
+        `<button class="btn btn-outline-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
+    ).join('') : '<p class="text-muted">No contact columns available</p>';
+
+    // Populate column dropdowns
+    document.querySelectorAll('.column-select').forEach(select => {
+        const currentValue = document.getElementById(select.dataset.field).value.match(/^{{(.+)}}$/)?.[1];
+        select.innerHTML = columns.map(col =>
+            `<option value="${col}" ${col === currentValue ? 'selected' : ''}>${col}</option>`
+        ).join('');
+        select.classList.toggle('d-none', select.parentElement.querySelector('.mode-select').value !== 'column');
+    });
+
+    // Set mode dropdowns based on input values
+    document.querySelectorAll('.mode-select').forEach(select => {
+        const input = document.getElementById(select.dataset.field);
+        const isColumn = input.value.match(/^{{(.+)}}$/) && columns.includes(input.value.match(/^{{(.+)}}$/)?.[1]);
+        select.value = isColumn ? 'column' : 'handlebars';
+        select.parentElement.querySelector('.column-select').classList.toggle('d-none', !isColumn);
+    });
 
     const { contacts, total } = await contactsModel.getPage(currentContactPage, contactPageSize);
     const selectorStatus = document.getElementById('contact-selector-status');
