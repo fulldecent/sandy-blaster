@@ -287,8 +287,8 @@ async function refreshMain() {
     templateStatus.textContent = !isStarted ? 'Template not started' :
         isValid ? 'Template ready to send' : 'Template started but not complete';
     templateLoad.classList.toggle('d-none', isStarted);
+    templateDownload.classList.toggle('d-none', !isValid);
     templateClear.classList.toggle('d-none', !isStarted);
-    templateDownload.classList.toggle('d-none', !isStarted);
     templateCard.classList.toggle('disabled', total === 0);
     templateCard.classList.toggle('opacity-50', total === 0);
 
