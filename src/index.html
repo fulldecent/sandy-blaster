@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-bs-theme="dark">
 
 <head>
     <title>Sendy Blaster</title>
@@ -11,16 +11,17 @@
 <body>
     <div class="container my-3">
         <h1>Sendy Blaster</h1>
-        <nav aria-label="breadcrumb" id="breadcrumbs">
+        <nav aria-label="breadcrumb" id="breadcrumbs" class="d-none">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="#" data-view="main">Sendy Blaster</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Template</li>
             </ol>
         </nav>
 
         <div id="main-view">
-            <div class="row">
+            <div class="row row-cols-1 row-cols-lg-3 g-4">
                 <!-- Contacts card -->
-                <div class="col-md-4 mb-3">
+                <div class="col">
                     <div class="card">
                         <div class="card-header">Contacts</div>
                         <div class="card-body">
@@ -33,22 +34,26 @@
                 </div>
 
                 <!-- Template card -->
-                <div class="col-md-4 mb-3">
+                <div class="col">
                     <div id="template-card" class="card">
                         <div class="card-header">Template</div>
                         <div class="card-body">
                             <p id="template-status">Template not started</p>
-                            <button id="template-load" class="btn btn-primary">Load template</button>
-                            <input type="file" id="template-upload" class="d-none" accept=".json">
-                            <button id="template-edit" class="btn btn-secondary">View/edit template</button>
-                            <button id="template-download" class="btn btn-secondary d-none">Download</button>
-                            <button id="template-clear" class="btn btn-danger d-none">Clear template</button>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button id="template-load" class="btn btn-primary">Load template</button>
+                                <input type="file" id="template-upload" class="d-none" accept=".json">
+                                <button id="template-edit" class="btn btn-secondary">View/edit template</button>
+                                <button id="template-download" class="btn btn-secondary d-none">Save template</button>
+                                <button id="template-clear" class="btn btn-danger d-none">Clear template</button>
+
+                            </div>
+
                         </div>
                     </div>
                 </div>
 
                 <!-- Sending card -->
-                <div class="col-md-4 mb-3">
+                <div class="col">
                     <div id="sending-card" class="card">
                         <div class="card-header">Sending</div>
                         <div class="card-body">
@@ -81,71 +86,72 @@
 
         <!-- View/edit template page -->
         <div id="template-view" class="d-none">
-            <h1>View/edit template</h1>
-            <div id="column-buttons" class="mb-3"></div>
-            <div class="row">
-                <div class="col-md-6">
+            <div class="row row-cols-1 row-cols-lg-2 g-4">
+                <div class="col">
+                    <h2>View/edit template</h2>
+                    <div id="column-buttons" class="mb-3"></div>
                     <div class="mb-3">
                         <label for="sender_name" class="form-label">Sender name</label>
-                        <input type="text" class="form-control" id="sender_name" name="sender_name">
-                        <div class="input-group mt-2">
+                        <div class="input-group mb-2">
                             <select class="form-select mode-select" data-field="sender_name">
                                 <option value="column">Column</option>
                                 <option value="handlebars">Handlebars</option>
                             </select>
                             <select class="form-select column-select d-none" data-field="sender_name"></select>
                         </div>
+                        <input type="text" class="form-control" id="sender_name" name="sender_name">
                     </div>
                     <div class="mb-3">
                         <label for="sender_email" class="form-label">Sender email</label>
-                        <input type="text" class="form-control" id="sender_email" name="sender_email">
-                        <div class="input-group mt-2">
+                        <div class="input-group mb-2">
                             <select class="form-select mode-select" data-field="sender_email">
                                 <option value="column">Column</option>
                                 <option value="handlebars">Handlebars</option>
                             </select>
                             <select class="form-select column-select d-none" data-field="sender_email"></select>
                         </div>
+                        <input type="text" class="form-control" id="sender_email" name="sender_email">
                     </div>
                     <div class="mb-3">
                         <label for="subject" class="form-label">Subject</label>
-                        <input type="text" class="form-control" id="subject" name="subject">
-                        <div class="input-group mt-2">
+                        <div class="input-group mb-2">
                             <select class="form-select mode-select" data-field="subject">
                                 <option value="column">Column</option>
                                 <option value="handlebars">Handlebars</option>
                             </select>
                             <select class="form-select column-select d-none" data-field="subject"></select>
                         </div>
+                        <input type="text" class="form-control" id="subject" name="subject">
                     </div>
                     <div class="mb-3">
                         <label for="recipient_name" class="form-label">Recipient name</label>
-                        <input type="text" class="form-control" id="recipient_name" name="recipient_name">
-                        <div class="input-group mt-2">
+                        <div class="input-group mb-2">
                             <select class="form-select mode-select" data-field="recipient_name">
                                 <option value="column">Column</option>
                                 <option value="handlebars">Handlebars</option>
                             </select>
                             <select class="form-select column-select d-none" data-field="recipient_name"></select>
                         </div>
+                        <input type="text" class="form-control" id="recipient_name" name="recipient_name">
                     </div>
                     <div class="mb-3">
                         <label for="recipient_email" class="form-label">Recipient email</label>
-                        <input type="text" class="form-control" id="recipient_email" name="recipient_email">
-                        <div class="input-group mt-2">
+                        <div class="input-group mb-2">
                             <select class="form-select mode-select" data-field="recipient_email">
                                 <option value="column">Column</option>
                                 <option value="handlebars">Handlebars</option>
                             </select>
                             <select class="form-select column-select d-none" data-field="recipient_email"></select>
                         </div>
+                        <input type="text" class="form-control" id="recipient_email" name="recipient_email">
                     </div>
                     <div class="mb-3">
                         <label for="template-text" class="form-label">Message</label>
                         <textarea class="form-control" id="template-text" rows="10"></textarea>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col">
+                    <h2>Preview</h2>
                     <p id="contact-selector-status"></p>
                     <p id="contact-page-info"></p>
                     <div class="mb-3">

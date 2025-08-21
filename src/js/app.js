@@ -30,6 +30,16 @@ async function init() {
             refreshMain(),
             refreshTemplateView()
         ]);
+
+        // Don't hurt people's eyes
+        const matchPrefersLight = window.matchMedia('(prefers-color-scheme:light)');
+        if (matchPrefersLight.matches) {
+            document.documentElement.setAttribute('data-bs-theme', 'light');
+        }
+        debugger;
+        matchPrefersLight.addEventListener('change', event => {
+            document.documentElement.setAttribute('data-bs-theme', event.matches ? "light" : "dark");
+        });
     } catch (error) {
         console.error('Initialization failed:', error);
         showError('Failed to initialize application: ' + error.message);
@@ -246,10 +256,7 @@ async function switchView(view) {
     document.getElementById('main-view').classList.toggle('d-none', view !== 'main');
     document.getElementById('template-view').classList.toggle('d-none', view !== 'template');
     const breadcrumbs = document.getElementById('breadcrumbs');
-    breadcrumbs.innerHTML = `
-    <li class="breadcrumb-item"><a href="#" data-view="main">Sendy Blaster</a></li>
-    ${view === 'template' ? '<li class="breadcrumb-item active" aria-current="page">View/edit template</li>' : ''}
-  `;
+    breadcrumbs.classList.toggle('d-none', view === 'main');
     if (view === 'main') await refreshMain();
     if (view === 'template') await refreshTemplateView();
 }
@@ -279,6 +286,7 @@ async function refreshMain() {
         template.recipient_name && template.recipient_email && template.body;
     templateStatus.textContent = !isStarted ? 'Template not started' :
         isValid ? 'Template ready to send' : 'Template started but not complete';
+    templateLoad.classList.toggle('d-none', isStarted);
     templateClear.classList.toggle('d-none', !isStarted);
     templateDownload.classList.toggle('d-none', !isStarted);
     templateCard.classList.toggle('disabled', total === 0);
@@ -376,6 +384,7 @@ async function refreshTemplateView() {
         <p><strong>Sender:</strong> ${preview.sender_name} &lt;${preview.sender_email}&gt;</p>
         <p><strong>Recipient:</strong> ${preview.recipient_name} &lt;${preview.recipient_email}&gt;</p>
         <p><strong>Subject:</strong> ${preview.subject}</p>
+        <p><em>Showing HTML, your email will send as an HTML message</em></p>
         <div><strong>Body:</strong><div>${preview.body}</div></div>
       `;
         } catch (err) {
