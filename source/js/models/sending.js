@@ -7,9 +7,6 @@ export default class SendingModel {
     }
 
     async set(config) {
-        if (!config.apiKey || !config.domain) {
-            throw new Error('Invalid configuration');
-        }
         await set('config', { id: 1, ...config });
     }
 

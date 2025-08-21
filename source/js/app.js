@@ -7,7 +7,6 @@ import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
 const contactsModel = new ContactsModel();
 const templatesModel = new TemplatesModel();
 const sendingModel = new SendingModel();
-let currentView = 'main';
 let currentContactPage = 1;
 const contactPageSize = 1;
 let currentContact = null;
@@ -27,6 +26,7 @@ async function init() {
 
         // Set up event listeners and refresh views
         setupEventListeners();
+        await loadConfig();
         await Promise.all([
             refreshMain(),
             refreshTemplateView()
@@ -44,6 +44,24 @@ async function init() {
         console.error('Initialization failed:', error);
         showError('Failed to initialize application: ' + error.message);
     }
+}
+
+async function loadConfig() {
+    const config = await sendingModel.get();
+    document.getElementById('apiKey').value = config.apiKey;
+    document.getElementById('domain').value = config.domain;
+    updateConfigValidation();
+}
+
+function updateConfigValidation() {
+    const apiKeyInput = document.getElementById('apiKey');
+    const domainInput = document.getElementById('domain');
+    const apiKeyValid = apiKeyInput.value.trim() !== '';
+    apiKeyInput.classList.toggle('is-valid', apiKeyValid);
+    apiKeyInput.classList.toggle('is-invalid', !apiKeyValid);
+    const domainValid = domainInput.value.trim() !== '';
+    domainInput.classList.toggle('is-valid', domainValid);
+    domainInput.classList.toggle('is-invalid', !domainValid);
 }
 
 function setupEventListeners() {
@@ -160,7 +178,7 @@ function setupEventListeners() {
         });
         input.addEventListener('blur', () => {
             setTimeout(() => {
-                if (document.activeElement !== focusedInput) {
+                if (document.activeElement !== focusedInput && !buttons.contains(document.activeElement)) {
                     buttons.style.display = 'none';
                     focusedInput = null;
                 }
@@ -168,7 +186,7 @@ function setupEventListeners() {
         });
     });
 
-    document.getElementById('column-buttons').addEventListener('click', e => {
+    buttons.addEventListener('click', e => {
         if (e.target.classList.contains('column-btn')) {
             const column = e.target.dataset.column;
             if (focusedInput) {
@@ -185,31 +203,14 @@ function setupEventListeners() {
         select.addEventListener('change', async () => {
             const field = select.dataset.field;
             const input = document.getElementById(field);
-            const columnSelect = select.parentElement.querySelector('.column-select');
-            columnSelect.classList.toggle('d-none', select.value !== 'column');
-            if (select.value === 'column') {
-                const columns = await contactsModel.getColumns();
-                const currentValue = input.value.match(/^{{(.+)}}$/)?.[1];
-                columnSelect.innerHTML = columns.map(col =>
-                    `<option value="${col}" ${col === currentValue ? 'selected' : ''}>${col}</option>`
-                ).join('');
-                if (columns.length > 0 && !columns.includes(currentValue)) {
-                    input.value = `{{${columns[0]}}}`;
-                    input.dispatchEvent(new Event('input')); // Trigger save and preview
-                }
-            } else {
+            const value = select.value;
+            if (value === 'handlebars') {
                 input.value = '';
-                input.dispatchEvent(new Event('input')); // Trigger save and preview
+            } else if (value.startsWith('column_')) {
+                const col = value.slice(7);
+                input.value = `{{${col}}}`;
             }
-        });
-    });
-
-    document.querySelectorAll('.column-select').forEach(select => {
-        select.addEventListener('change', () => {
-            const field = select.dataset.field;
-            const input = document.getElementById(field);
-            input.value = `{{${select.value}}}`;
-            input.dispatchEvent(new Event('input')); // Trigger save and preview
+            input.dispatchEvent(new Event('input'));
         });
     });
 
@@ -234,13 +235,15 @@ function setupEventListeners() {
 
     // Sending card
     document.getElementById('sending-config').addEventListener('input', async e => {
-        const formData = new FormData(e.target);
+        const form = document.getElementById('sending-config');
+        const formData = new FormData(form);
         const config = {
             apiKey: formData.get('apiKey'),
             domain: formData.get('domain')
         };
         try {
             await sendingModel.set(config);
+            updateConfigValidation();
             await refreshMain();
         } catch (err) {
             showError(err.message);
@@ -270,7 +273,7 @@ function setupEventListeners() {
     document.getElementById('sending-download').addEventListener('click', async () => {
         try {
             const blob = await contactsModel.exportCSV();
-            downloadBlob(blob, 'contacts.csv');
+            downloadBlob(blob, 'report.csv');
         } catch (err) {
             showError(err.message);
         }
@@ -278,7 +281,6 @@ function setupEventListeners() {
 }
 
 async function switchView(view) {
-    currentView = view;
     document.getElementById('main-view').classList.toggle('d-none', view !== 'main');
     document.getElementById('template-view').classList.toggle('d-none', view !== 'template');
     const breadcrumbs = document.getElementById('breadcrumbs');
@@ -372,21 +374,19 @@ async function refreshTemplateView() {
         `<button class="btn btn-outline-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
     ).join('') : '<p class="text-muted">No contact columns available</p>';
 
-    // Populate column dropdowns
-    document.querySelectorAll('.column-select').forEach(select => {
-        const currentValue = document.getElementById(select.dataset.field).value.match(/^{{(.+)}}$/)?.[1];
-        select.innerHTML = columns.map(col =>
-            `<option value="${col}" ${col === currentValue ? 'selected' : ''}>${col}</option>`
-        ).join('');
-        select.classList.toggle('d-none', select.parentElement.querySelector('.mode-select').value !== 'column');
-    });
-
-    // Set mode dropdowns based on input values
     document.querySelectorAll('.mode-select').forEach(select => {
-        const input = document.getElementById(select.dataset.field);
-        const isColumn = input.value.match(/^{{(.+)}}$/) && columns.includes(input.value.match(/^{{(.+)}}$/)?.[1]);
-        select.value = isColumn ? 'column' : 'handlebars';
-        select.parentElement.querySelector('.column-select').classList.toggle('d-none', !isColumn);
+        const field = select.dataset.field;
+        const input = document.getElementById(field);
+        const currentValue = input.value.match(/^{{(.+)}}$/)?.[1];
+        const isColumn = currentValue && columns.includes(currentValue);
+        let html = '<option value="handlebars">Handlebars</option>';
+        html += columns.map(col =>
+            `<option value="column_${col}" ${col === currentValue ? 'selected' : ''}>Column: ${col}</option>`
+        ).join('');
+        select.innerHTML = html;
+        if (!isColumn) {
+            select.value = 'handlebars';
+        }
     });
 
     const fields = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email'];

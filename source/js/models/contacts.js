@@ -3,7 +3,6 @@ import Papa from 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm';
 
 export default class ContactsModel {
     async init() {
-        // No explicit initialization needed; idb-keyval manages the database
         this.nextId = (await get('nextId')) || 1; // Track auto-incrementing ID
     }
 
@@ -22,7 +21,7 @@ export default class ContactsModel {
                 complete: async () => {
                     for (const contact of contacts) {
                         const id = this.nextId++;
-                        await set(`contact:${id}`, { id, ...contact });
+                        await set(`contact:${id}`, contact);
                     }
                     await set('nextId', this.nextId); // Update next ID
                     resolve();
@@ -55,8 +54,7 @@ export default class ContactsModel {
         const contacts = allEntries
             .filter(([key]) => key.startsWith('contact:'))
             .map(([_, value]) => {
-                const { id, ...rest } = value;
-                return { sent_at: rest.sent_at, status: rest.status, ...rest };
+                return { sent_at: value.sent_at, status: value.status, ...value };
             });
         const csv = Papa.unparse(contacts);
         return new Blob([csv], { type: 'text/csv' });

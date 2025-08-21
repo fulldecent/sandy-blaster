@@ -1,0 +1,6 @@
+# Jekyll configuration
+destination: build
+source: source
+exclude:
+  - .gitignore
+theme: null
