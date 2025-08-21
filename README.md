@@ -1,4 +1,4 @@
-# Sendy Blaster
+# Sandy Blaster
 
 ## Running
 
