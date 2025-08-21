@@ -2,6 +2,7 @@ import ContactsModel from './models/contacts.js';
 import TemplatesModel from './models/templates.js';
 import SendingModel from './models/sending.js';
 import { showError, downloadBlob } from './utils.js';
+import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
 
 const contactsModel = new ContactsModel();
 const templatesModel = new TemplatesModel();
@@ -36,7 +37,6 @@ async function init() {
         if (matchPrefersLight.matches) {
             document.documentElement.setAttribute('data-bs-theme', 'light');
         }
-        debugger;
         matchPrefersLight.addEventListener('change', event => {
             document.documentElement.setAttribute('data-bs-theme', event.matches ? "light" : "dark");
         });
@@ -261,6 +261,25 @@ async function switchView(view) {
     if (view === 'template') await refreshTemplateView();
 }
 
+function isValidHandlebars(str) {
+    if (!str.trim()) return false;
+    // Check for incomplete Handlebars syntax
+    if (str.match(/{{[^}]*$/) || !str.match(/{{[^}]+}}/)) {
+        try {
+            Handlebars.compile(str)({});
+            return true;
+        } catch {
+            return false;
+        }
+    }
+    try {
+        Handlebars.compile(str)({});
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 async function refreshMain() {
     // Contacts card
     const { total } = await contactsModel.getPage(1, Number.MAX_SAFE_INTEGER);
@@ -280,10 +299,8 @@ async function refreshMain() {
     const templateEdit = document.getElementById('template-edit');
     const templateDownload = document.getElementById('template-download');
     const templateCard = document.getElementById('template-card');
-    const isStarted = template.sender_name || template.sender_email || template.subject ||
-        template.recipient_name || template.recipient_email || template.body;
-    const isValid = template.sender_name && template.sender_email && template.subject &&
-        template.recipient_name && template.recipient_email && template.body;
+    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].some(key => template[key]);
+    const isValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].every(key => isValidHandlebars(template[key]));
     templateStatus.textContent = !isStarted ? 'Template not started' :
         isValid ? 'Template ready to send' : 'Template started but not complete';
     templateLoad.classList.toggle('d-none', isStarted);
@@ -354,6 +371,21 @@ async function refreshTemplateView() {
         select.value = isColumn ? 'column' : 'handlebars';
         select.parentElement.querySelector('.column-select').classList.toggle('d-none', !isColumn);
     });
+
+    const fields = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email'];
+    fields.forEach(field => {
+        const input = document.getElementById(field);
+        const value = input.value.trim();
+        const valid = isValidHandlebars(value);
+        input.classList.toggle('is-valid', valid);
+        input.classList.toggle('is-invalid', !valid);
+    });
+
+    const bodyInput = document.getElementById('template-text');
+    const bodyValue = bodyInput.value.trim();
+    const bodyValid = isValidHandlebars(bodyValue);
+    bodyInput.classList.toggle('is-valid', bodyValid);
+    bodyInput.classList.toggle('is-invalid', !bodyValid);
 
     const { contacts, total } = await contactsModel.getPage(currentContactPage, contactPageSize);
     const selectorStatus = document.getElementById('contact-selector-status');
