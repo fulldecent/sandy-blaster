@@ -3,4 +3,6 @@ destination: build
 source: source
 exclude:
   - .gitignore
+  - DESIGN.md
+  - README.md
 theme: null
