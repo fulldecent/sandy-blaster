@@ -1,4 +1,5 @@
 # Jekyll configuration
+permalink: /:categories/:year/:month/:day/:title
 destination: build
 source: source
 exclude:
