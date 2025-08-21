@@ -1,9 +1,5 @@
 # Jekyll configuration
-permalink: /:categories/:year/:month/:day/:title
-destination: build
-source: source
 exclude:
-  - .gitignore
   - DESIGN.md
   - README.md
-# theme: null
+theme: null
