@@ -139,17 +139,43 @@ function setupEventListeners() {
     });
 
     // Column buttons
+    const buttons = document.getElementById('column-buttons');
+    buttons.style.display = 'none';
+    let focusedInput = null;
+    const templateInputElements = templateInputs.map(id => document.getElementById(id));
+    templateInputElements.forEach(input => {
+        input.addEventListener('focus', async () => {
+            focusedInput = input;
+            const columns = await contactsModel.getColumns();
+            if (columns.length > 0) {
+                buttons.innerHTML = columns.map(col =>
+                    `<button class="btn btn-outline-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
+                ).join('');
+                buttons.style.display = 'block';
+                const parent = input.parentElement;
+                parent.insertBefore(buttons, input);
+            } else {
+                buttons.style.display = 'none';
+            }
+        });
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (document.activeElement !== focusedInput) {
+                    buttons.style.display = 'none';
+                    focusedInput = null;
+                }
+            }, 100);
+        });
+    });
+
     document.getElementById('column-buttons').addEventListener('click', e => {
         if (e.target.classList.contains('column-btn')) {
             const column = e.target.dataset.column;
-            const activeElement = document.activeElement;
-            if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
-                const start = activeElement.selectionStart;
-                const end = activeElement.selectionEnd;
-                const value = activeElement.value;
-                activeElement.value = value.slice(0, start) + `{{${column}}}` + value.slice(end);
-                activeElement.selectionStart = activeElement.selectionEnd = start + column.length + 4;
-                activeElement.dispatchEvent(new Event('input')); // Trigger save and preview
+            if (focusedInput) {
+                focusedInput.value += `{{${column}}}`;
+                focusedInput.focus();
+                focusedInput.selectionStart = focusedInput.selectionEnd = focusedInput.value.length;
+                focusedInput.dispatchEvent(new Event('input'));
             }
         }
     });
@@ -263,15 +289,6 @@ async function switchView(view) {
 
 function isValidHandlebars(str) {
     if (!str.trim()) return false;
-    // Check for incomplete Handlebars syntax
-    if (str.match(/{{[^}]*$/) || !str.match(/{{[^}]+}}/)) {
-        try {
-            Handlebars.compile(str)({});
-            return true;
-        } catch {
-            return false;
-        }
-    }
     try {
         Handlebars.compile(str)({});
         return true;
