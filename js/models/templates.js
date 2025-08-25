@@ -5,6 +5,8 @@ export default class TemplatesModel {
     constructor() {
         // Cache for compiled Handlebars templates to improve performance
         this._compiledCache = null;
+        // Template fields that need compilation
+        this._templateFields = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'];
     }
 
     async init() {
@@ -24,7 +26,10 @@ export default class TemplatesModel {
     async set(template) {
         await set('template', { id: 1, ...template });
         // Compile templates immediately for better performance
-        this._compileAndCache(template);
+        this._compiledCache = {};
+        this._templateFields.forEach(field => {
+            this._compiledCache[field] = Handlebars.compile(template[field]);
+        });
     }
 
     async get() {
@@ -39,25 +44,16 @@ export default class TemplatesModel {
         };
     }
 
-    _compileAndCache(template) {
-        // Compile templates and cache them
-        this._compiledCache = {
-            sender_name: Handlebars.compile(template.sender_name),
-            sender_email: Handlebars.compile(template.sender_email),
-            subject: Handlebars.compile(template.subject),
-            recipient_name: Handlebars.compile(template.recipient_name),
-            recipient_email: Handlebars.compile(template.recipient_email),
-            body: Handlebars.compile(template.body)
-        };
-    }
-
     _getCompiledTemplates(template) {
         // Use cached templates if available, otherwise compile and cache
         if (this._compiledCache) {
             return this._compiledCache;
         }
         
-        this._compileAndCache(template);
+        this._compiledCache = {};
+        this._templateFields.forEach(field => {
+            this._compiledCache[field] = Handlebars.compile(template[field]);
+        });
         return this._compiledCache;
     }
 
