@@ -2,6 +2,12 @@ import { set, get, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/+es
 import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
 
 export default class TemplatesModel {
+    constructor() {
+        // Cache for compiled Handlebars templates to improve performance
+        this._compiledCache = null;
+        this._lastTemplate = null;
+    }
+
     async init() {
         // No explicit initialization needed; idb-keyval manages the database
     }
@@ -18,6 +24,9 @@ export default class TemplatesModel {
 
     async set(template) {
         await set('template', { id: 1, ...template });
+        // Clear cache when template changes
+        this._compiledCache = null;
+        this._lastTemplate = null;
     }
 
     async get() {
@@ -32,8 +41,19 @@ export default class TemplatesModel {
         };
     }
 
-    async renderPreview(contact) {
-        const template = await this.get();
+    _getCompiledTemplates(template) {
+        // Check if we can use cached compiled templates
+        if (this._compiledCache && this._lastTemplate && 
+            this._lastTemplate.sender_name === template.sender_name &&
+            this._lastTemplate.sender_email === template.sender_email &&
+            this._lastTemplate.subject === template.subject &&
+            this._lastTemplate.recipient_name === template.recipient_name &&
+            this._lastTemplate.recipient_email === template.recipient_email &&
+            this._lastTemplate.body === template.body) {
+            return this._compiledCache;
+        }
+
+        // Compile templates and cache them
         const compiled = {
             sender_name: Handlebars.compile(template.sender_name),
             sender_email: Handlebars.compile(template.sender_email),
@@ -42,6 +62,18 @@ export default class TemplatesModel {
             recipient_email: Handlebars.compile(template.recipient_email),
             body: Handlebars.compile(template.body)
         };
+
+        // Cache the compiled templates and the template content for comparison
+        this._compiledCache = compiled;
+        this._lastTemplate = { ...template };
+        
+        return compiled;
+    }
+
+    async renderPreview(contact) {
+        const template = await this.get();
+        const compiled = this._getCompiledTemplates(template);
+        
         return {
             sender_name: compiled.sender_name(contact),
             sender_email: compiled.sender_email(contact),
@@ -59,5 +91,8 @@ export default class TemplatesModel {
 
     async clear() {
         await del('template');
+        // Clear cache when template is cleared
+        this._compiledCache = null;
+        this._lastTemplate = null;
     }
 }
