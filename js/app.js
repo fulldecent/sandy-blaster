@@ -80,10 +80,25 @@ function setupEventListeners() {
 
     document.getElementById('contacts-upload').addEventListener('change', async e => {
         try {
-            await contactsModel.loadCSV(e.target.files[0]);
+            const statusElement = document.getElementById('contacts-status');
+            const loadButton = document.getElementById('contacts-load');
+            
+            // Disable the button and show initial progress
+            loadButton.disabled = true;
+            statusElement.textContent = 'Starting CSV upload...';
+            
+            await contactsModel.loadCSV(e.target.files[0], (message) => {
+                statusElement.textContent = message;
+            });
+            
             await refreshMain();
             await refreshTemplateView();
+            
+            // Re-enable the button
+            loadButton.disabled = false;
         } catch (err) {
+            // Re-enable the button on error
+            document.getElementById('contacts-load').disabled = false;
             showError(err.message);
         }
     });
