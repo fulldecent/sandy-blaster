@@ -5,7 +5,6 @@ export default class TemplatesModel {
     constructor() {
         // Cache for compiled Handlebars templates to improve performance
         this._compiledCache = null;
-        this._lastTemplate = null;
     }
 
     async init() {
@@ -25,7 +24,7 @@ export default class TemplatesModel {
     async set(template) {
         await set('template', { id: 1, ...template });
         // Compile templates immediately for better performance
-        this._getCompiledTemplates(template);
+        this._compileAndCache(template);
     }
 
     async get() {
@@ -40,20 +39,9 @@ export default class TemplatesModel {
         };
     }
 
-    _getCompiledTemplates(template) {
-        // Check if we can use cached compiled templates
-        if (this._compiledCache && this._lastTemplate && 
-            this._lastTemplate.sender_name === template.sender_name &&
-            this._lastTemplate.sender_email === template.sender_email &&
-            this._lastTemplate.subject === template.subject &&
-            this._lastTemplate.recipient_name === template.recipient_name &&
-            this._lastTemplate.recipient_email === template.recipient_email &&
-            this._lastTemplate.body === template.body) {
-            return this._compiledCache;
-        }
-
+    _compileAndCache(template) {
         // Compile templates and cache them
-        const compiled = {
+        this._compiledCache = {
             sender_name: Handlebars.compile(template.sender_name),
             sender_email: Handlebars.compile(template.sender_email),
             subject: Handlebars.compile(template.subject),
@@ -61,12 +49,16 @@ export default class TemplatesModel {
             recipient_email: Handlebars.compile(template.recipient_email),
             body: Handlebars.compile(template.body)
         };
+    }
 
-        // Cache the compiled templates and the template content for comparison
-        this._compiledCache = compiled;
-        this._lastTemplate = { ...template };
+    _getCompiledTemplates(template) {
+        // Use cached templates if available, otherwise compile and cache
+        if (this._compiledCache) {
+            return this._compiledCache;
+        }
         
-        return compiled;
+        this._compileAndCache(template);
+        return this._compiledCache;
     }
 
     async renderPreview(contact) {
@@ -92,6 +84,5 @@ export default class TemplatesModel {
         await del('template');
         // Clear cache when template is cleared
         this._compiledCache = null;
-        this._lastTemplate = null;
     }
 }
