@@ -24,9 +24,8 @@ export default class TemplatesModel {
 
     async set(template) {
         await set('template', { id: 1, ...template });
-        // Clear cache when template changes
-        this._compiledCache = null;
-        this._lastTemplate = null;
+        // Compile templates immediately for better performance
+        this._getCompiledTemplates(template);
     }
 
     async get() {
