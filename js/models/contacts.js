@@ -14,6 +14,12 @@ export default class ContactsModel {
                 header: true,
                 dynamicTyping: true,
                 step: async (row) => {
+                    // Skip empty rows (e.g., from trailing CRLF)
+                    const hasData = Object.values(row.data).some(value => 
+                        value !== null && value !== undefined && String(value).trim() !== ''
+                    );
+                    if (!hasData) return;
+                    
                     if (!row.data.sent_at) row.data.sent_at = null;
                     if (!row.data.status) row.data.status = null;
                     contacts.push(row.data);
