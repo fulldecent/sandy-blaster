@@ -1,86 +1,126 @@
-import { set, get, del, clear, entries } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/+esm';
+import { set, get, del, entries, setMany, getMany } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/+esm';
 import Papa from 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm';
 
 export default class ContactsModel {
-    async init() {
-        this.nextId = (await get('nextId')) || 1; // Track auto-incrementing ID
-    }
-
+    /**
+     * Parses a CSV file and atomically adds the contacts to the database.
+     * To avoid memory leaking, the UI should call clear() before loadCSV().
+     * @param {File} file The CSV file to process.
+     */
     async loadCSV(file) {
-        if (!file || file.size > 100 * 1024 * 1024) throw new Error('Invalid or too large CSV file');
-        const contacts = [];
+        if (!file || file.size > 100 * 1024 * 1024) {
+            throw new Error('Invalid or too large CSV file');
+        }
+
+        const newContacts = [];
         return new Promise((resolve, reject) => {
             Papa.parse(file, {
                 header: true,
                 dynamicTyping: true,
-                step: async (row) => {
-                    // Skip empty rows (e.g., from trailing CRLF)
-                    const hasData = Object.values(row.data).some(value => 
-                        value !== null && value !== undefined && String(value).trim() !== ''
-                    );
-                    if (!hasData) return;
-                    
+                skipEmptyLines: true,
+                step: (row) => {
+                    // Ensure core fields have default null values if missing
                     if (!row.data.sent_at) row.data.sent_at = null;
                     if (!row.data.status) row.data.status = null;
-                    contacts.push(row.data);
+                    newContacts.push(row.data);
                 },
                 complete: async () => {
-                    for (const contact of contacts) {
-                        const id = this.nextId++;
-                        await set(`contact:${id}`, contact);
+                    try {
+                        // Prepare entries for atomic setMany operation
+                        const entriesToSet = newContacts.map((contact, index) => {
+                            const id = 1 + index;
+                            const key = `contact:${id}`;
+                            return [key, contact];
+                        });
+                        entriesToSet.push(['contact-count', newContacts.length]);
+                        await setMany(entriesToSet);
+                        resolve();
+                    } catch (dbError) {
+                        reject(new Error(`Database write failed: ${dbError.message}`));
                     }
-                    await set('nextId', this.nextId); // Update next ID
-                    resolve();
                 },
-                error: err => reject(new Error(`CSV parsing failed: ${err.message}`))
+                error: (err) => reject(new Error(`CSV parsing failed: ${err.message}`)),
             });
         });
     }
 
+    /**
+     * Retrieves a paginated list of contacts.
+     * @param {number} page The page number (1-indexed).
+     * @param {number} limit The number of items per page.
+     * @returns {Promise<{contacts: object[], total: number}>}
+     */
     async getPage(page, limit) {
-        const allEntries = await entries();
-        const contacts = allEntries
-            .filter(([key]) => key.startsWith('contact:'))
-            .map(([_, value]) => value);
-        const total = contacts.length;
-        const start = (page - 1) * limit;
-        const end = start + limit;
-        return { contacts: contacts.slice(start, end), total };
+        const total = (await get('contact-count')) || 0;
+        const startId = (page - 1) * limit + 1;
+        const endId = Math.min(startId + limit - 1, total);
+
+        // Ensure we don't request keys that don't exist
+        if (startId > endId) {
+            return { contacts: [], total };
+        }
+
+        // Generate the specific keys to fetch
+        const keysToFetch = [];
+        for (let i = startId; i <= endId; i++) {
+            keysToFetch.push(`contact:${i}`);
+        }
+
+        const contacts = await getMany(keysToFetch);
+        return { contacts, total };
     }
 
+    /**
+     * Updates a single contact record.
+     * @param {number|string} id The ID of the contact.
+     * @param {object} updates The properties to update.
+     */
     async updateContact(id, updates) {
-        const contact = await get(`contact:${id}`);
+        const key = `contact:${id}`;
+        const contact = await get(key);
         if (contact) {
-            await set(`contact:${id}`, { ...contact, ...updates });
+            await set(key, { ...contact, ...updates });
         }
     }
 
+    /**
+     * Retrieves all contacts and converts them to a CSV file blob.
+     * @returns {Promise<Blob>} A blob containing the data in CSV format.
+     */
     async exportCSV() {
-        const allEntries = await entries();
-        const contacts = allEntries
-            .filter(([key]) => key.startsWith('contact:'))
-            .map(([_, value]) => {
-                return { sent_at: value.sent_at, status: value.status, ...value };
-            });
+        const total = (await get('contact-count')) || 0;
+        if (total === 0) {
+            return new Blob([''], { type: 'text/csv' });
+        }
+
+        // Generate all keys from 1 to total
+        const allContactKeys = Array.from({ length: total }, (_, i) => `contact:${i + 1}`);
+        const contacts = await getMany(allContactKeys);
         const csv = Papa.unparse(contacts);
         return new Blob([csv], { type: 'text/csv' });
     }
 
+    /**
+     * Clears all contact data from the database.
+     * This method iterates through all keys to preserve any non-contact data, as requested.
+     */
     async clear() {
-        const allKeys = await entries();
-        for (const [key] of allKeys) {
-            if (key.startsWith('contact:') || key === 'nextId') {
+        const allDbEntries = await entries();
+        for (const [key] of allDbEntries) {
+            if (key.startsWith('contact:')) {
                 await del(key);
             }
         }
-        this.nextId = 1;
-        await set('nextId', 1);
+        // Delete or reset the count
+        await set('contact-count', 0);
     }
 
+    /**
+     * Gets the column headers from the first contact record.
+     * @returns {Promise<string[]>} An array of column names.
+     */
     async getColumns() {
-        const allEntries = await entries();
-        const contact = allEntries
-            .find(([key]) => key.startsWith('contact:'));
-        return contact ? Object.keys(contact[1]) : [];
+        const firstContact = await get('contact:1');
+        return firstContact ? Object.keys(firstContact) : [];
     }
 }

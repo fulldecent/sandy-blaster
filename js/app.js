@@ -6,7 +6,7 @@ import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
 
 const contactsModel = new ContactsModel();
 const templatesModel = new TemplatesModel();
-const sendingModel = new SendingModel();
+const sendingModel = new SendingModel(templatesModel);
 let currentContactPage = 1;
 const contactPageSize = 1;
 let currentContact = null;
@@ -18,9 +18,7 @@ async function init() {
     try {
         // Await all model initializations
         await Promise.all([
-            contactsModel.init(),
-            templatesModel.init(),
-            sendingModel.init()
+            templatesModel.init()
         ]);
         console.log('All models initialized successfully');
 
@@ -318,8 +316,8 @@ async function refreshMain() {
     const templateEdit = document.getElementById('template-edit');
     const templateDownload = document.getElementById('template-download');
     const templateCard = document.getElementById('template-card');
-    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].some(key => template[key]);
-    const isValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].every(key => isValidHandlebars(template[key]));
+    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].some(key => template?.[key] || '');
+    const isValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].every(key => isValidHandlebars(template?.[key] || ''));
     templateStatus.textContent = !isStarted ? 'Template not started' :
         isValid ? 'Template ready to send' : 'Template started but not complete';
     templateLoad.classList.toggle('d-none', isStarted);
@@ -355,7 +353,7 @@ async function refreshMain() {
 
 async function refreshTemplateView() {
     const template = await templatesModel.get();
-    document.getElementById('template-text').value = template.body || '';
+    document.getElementById('template-text').value = template?.body || '';
     const inputs = {
         sender_name: document.getElementById('sender_name'),
         sender_email: document.getElementById('sender_email'),
@@ -364,7 +362,7 @@ async function refreshTemplateView() {
         recipient_email: document.getElementById('recipient_email')
     };
     Object.entries(inputs).forEach(([key, input]) => {
-        input.value = template[key] || '';
+        input.value = template?.[key] || '';
     });
 
     // Populate column buttons
@@ -428,7 +426,7 @@ async function refreshTemplateView() {
         randomBtn.disabled = false;
         currentContact = contacts[0];
         try {
-            const preview = await templatesModel.renderPreview(currentContact);
+            const preview = await templatesModel.render(currentContact);
             previewContent.innerHTML = `
         <p><strong>Sender:</strong> ${preview.sender_name} &lt;${preview.sender_email}&gt;</p>
         <p><strong>Recipient:</strong> ${preview.recipient_name} &lt;${preview.recipient_email}&gt;</p>

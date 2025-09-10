@@ -2,54 +2,62 @@ import { set, get, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/+es
 import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
 
 export default class TemplatesModel {
+    static REQUIRED_FIELDS = [
+        'sender_name',
+        'sender_email',
+        'subject',
+        'recipient_name',
+        'recipient_email',
+        'body'
+    ];
+
+    #compiledTemplates = {};
+
+    #compileTemplates(template) {
+        return Object.fromEntries(
+            TemplatesModel.REQUIRED_FIELDS.map(field => [
+                field,
+                Handlebars.compile(template?.[field] || '')
+            ])
+        );
+    }
+
+    // MAYBE: could instead do this one time in render() if not initialized
+    // and reset during reset/clear
     async init() {
-        // No explicit initialization needed; idb-keyval manages the database
+        const template = await get('template');
+        if (template) {
+            this.#compiledTemplates = this.#compileTemplates(template);
+        }
     }
 
     async loadJSON(file) {
         const text = await file.text();
         const template = JSON.parse(text);
-        if (!template.sender_name || !template.sender_email || !template.subject ||
-            !template.recipient_name || !template.recipient_email || !template.body) {
-            throw new Error('Invalid template format');
-        }
+        TemplatesModel.REQUIRED_FIELDS.forEach(field => {
+            if (typeof template[field] !== 'string') {
+                throw new Error(`Missing or invalid field: ${field}`);
+            }
+        });
         await this.set(template);
     }
 
     async set(template) {
-        await set('template', { id: 1, ...template });
+        this.#compiledTemplates = this.#compileTemplates(template);
+        await set('template', template);
     }
 
     async get() {
-        const template = await get('template');
-        return template || {
-            sender_name: '',
-            sender_email: '',
-            subject: '',
-            recipient_name: '',
-            recipient_email: '',
-            body: ''
-        };
+        return await get('template');
     }
 
-    async renderPreview(contact) {
-        const template = await this.get();
-        const compiled = {
-            sender_name: Handlebars.compile(template.sender_name),
-            sender_email: Handlebars.compile(template.sender_email),
-            subject: Handlebars.compile(template.subject),
-            recipient_name: Handlebars.compile(template.recipient_name),
-            recipient_email: Handlebars.compile(template.recipient_email),
-            body: Handlebars.compile(template.body)
-        };
-        return {
-            sender_name: compiled.sender_name(contact),
-            sender_email: compiled.sender_email(contact),
-            subject: compiled.subject(contact),
-            recipient_name: compiled.recipient_name(contact),
-            recipient_email: compiled.recipient_email(contact),
-            body: compiled.body(contact)
-        };
+    async render(contact) {
+        return Object.fromEntries(
+            TemplatesModel.REQUIRED_FIELDS.map(field => [
+                field,
+                this.#compiledTemplates[field]?.(contact) || ''
+            ])
+        );
     }
 
     async exportJSON() {
@@ -58,6 +66,7 @@ export default class TemplatesModel {
     }
 
     async clear() {
+        this.#compiledTemplates = {};
         await del('template');
     }
 }
