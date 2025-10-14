@@ -8,6 +8,7 @@ export default class TemplatesModel {
         'subject',
         'recipient_name',
         'recipient_email',
+        'recipient_cc',
         'body'
     ];
 
