@@ -133,7 +133,7 @@ function setupEventListeners() {
     });
 
     // Template view: Real-time saving and column buttons
-    const templateInputs = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'template-text'];
+    const templateInputs = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc', 'template-text'];
     templateInputs.forEach(id => {
         const input = document.getElementById(id);
         input.addEventListener('input', async () => {
@@ -144,6 +144,7 @@ function setupEventListeners() {
                     subject: document.getElementById('subject').value,
                     recipient_name: document.getElementById('recipient_name').value,
                     recipient_email: document.getElementById('recipient_email').value,
+                    recipient_cc: document.getElementById('recipient_cc').value,
                     body: document.getElementById('template-text').value
                 };
                 await templatesModel.set(template);
@@ -316,8 +317,8 @@ async function refreshMain() {
     const templateEdit = document.getElementById('template-edit');
     const templateDownload = document.getElementById('template-download');
     const templateCard = document.getElementById('template-card');
-    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].some(key => template?.[key] || '');
-    const isValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].every(key => isValidHandlebars(template?.[key] || ''));
+    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc', 'body'].some(key => template?.[key] || '');
+    const isValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc', 'body'].every(key => isValidHandlebars(template?.[key] || ''));
     templateStatus.textContent = !isStarted ? 'Template not started' :
         isValid ? 'Template ready to send' : 'Template started but not complete';
     templateLoad.classList.toggle('d-none', isStarted);
@@ -359,7 +360,8 @@ async function refreshTemplateView() {
         sender_email: document.getElementById('sender_email'),
         subject: document.getElementById('subject'),
         recipient_name: document.getElementById('recipient_name'),
-        recipient_email: document.getElementById('recipient_email')
+        recipient_email: document.getElementById('recipient_email'),
+        recipient_cc: document.getElementById('recipient_cc')
     };
     Object.entries(inputs).forEach(([key, input]) => {
         input.value = template?.[key] || '';
@@ -387,7 +389,7 @@ async function refreshTemplateView() {
         }
     });
 
-    const fields = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email'];
+    const fields = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc'];
     fields.forEach(field => {
         const input = document.getElementById(field);
         const value = input.value.trim();
@@ -430,6 +432,7 @@ async function refreshTemplateView() {
             previewContent.innerHTML = `
         <p><strong>Sender:</strong> ${preview.sender_name} &lt;${preview.sender_email}&gt;</p>
         <p><strong>Recipient:</strong> ${preview.recipient_name} &lt;${preview.recipient_email}&gt;</p>
+        <p><strong>CC:</strong> ${preview.recipient_cc || '<em>None</em>'}</p>
         <p><strong>Subject:</strong> ${preview.subject}</p>
         <p><em>Showing HTML, your email will send as an HTML message</em></p>
         <div><strong>Body:</strong><div>${preview.body}</div></div>

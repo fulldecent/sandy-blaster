@@ -48,6 +48,9 @@ export default class SendingModel {
             const formData = new FormData();
             formData.append('from', `${rendered.sender_name} <${rendered.sender_email}>`);
             formData.append('to', `${rendered.recipient_name} <${rendered.recipient_email}>`);
+            if (rendered.recipient_cc && rendered.recipient_cc.trim()) {
+                formData.append('cc', rendered.recipient_cc);
+            }
             formData.append('subject', rendered.subject);
             formData.append('html', rendered.body);
 
