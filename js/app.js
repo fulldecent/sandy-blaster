@@ -10,17 +10,13 @@ const sendingModel = new SendingModel(templatesModel);
 let currentContactPage = 1;
 const contactPageSize = 1;
 let currentContact = null;
-let sendingState = 'idle'; // idle, sending, paused
+let sendingState = 'idle'; // idle, sending, paused, complete
 let sentCount = 0;
 let totalContacts = 0;
 
 async function init() {
     try {
-        // Await all model initializations
-        await Promise.all([
-            templatesModel.init()
-        ]);
-        console.log('All models initialized successfully');
+        console.log('Initializing application');
 
         // Set up event listeners and refresh views
         setupEventListeners();
@@ -227,7 +223,7 @@ function setupEventListeners() {
     });
 
     document.getElementById('contact-random').addEventListener('click', async () => {
-        const { total } = await contactsModel.getPage(1, Number.MAX_SAFE_INTEGER);
+        const total = await contactsModel.getCount();
         currentContactPage = Math.floor(Math.random() * total) + 1;
         await refreshTemplateView();
     });
@@ -252,6 +248,8 @@ function setupEventListeners() {
     document.getElementById('sending-send').addEventListener('click', async () => {
         if (window.confirm('Send emails to all contacts?')) {
             sendingState = 'sending';
+            sentCount = 0;
+            totalContacts = 0;
             await refreshMain();
             await sendEmails();
         }
@@ -298,9 +296,20 @@ function isValidHandlebars(str) {
     }
 }
 
+function isValidHandlebarsOptional(str) {
+    // Optional fields can be empty
+    if (!str.trim()) return true;
+    try {
+        Handlebars.compile(str)({});
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 async function refreshMain() {
     // Contacts card
-    const { total } = await contactsModel.getPage(1, Number.MAX_SAFE_INTEGER);
+    const total = await contactsModel.getCount();
     const contactsStatus = document.getElementById('contacts-status');
     const contactsClear = document.getElementById('contacts-clear');
     const contactsLoad = document.getElementById('contacts-load');
@@ -317,8 +326,10 @@ async function refreshMain() {
     const templateEdit = document.getElementById('template-edit');
     const templateDownload = document.getElementById('template-download');
     const templateCard = document.getElementById('template-card');
-    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc', 'body'].some(key => template?.[key] || '');
-    const isValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc', 'body'].every(key => isValidHandlebars(template?.[key] || ''));
+    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].some(key => template?.[key] || '');
+    const requiredFieldsValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].every(key => isValidHandlebars(template?.[key] || ''));
+    const optionalFieldsValid = isValidHandlebarsOptional(template?.recipient_cc || '');
+    const isValid = requiredFieldsValid && optionalFieldsValid;
     templateStatus.textContent = !isStarted ? 'Template not started' :
         isValid ? 'Template ready to send' : 'Template started but not complete';
     templateLoad.classList.toggle('d-none', isStarted);
@@ -334,17 +345,21 @@ async function refreshMain() {
     const progressDiv = document.getElementById('sending-progress');
     const downloadBtn = document.getElementById('sending-download');
     const pauseBtn = document.getElementById('sending-pause');
+    const stopBtn = document.getElementById('sending-stop');
     const sendingCard = document.getElementById('sending-card');
     const isConfigValid = config.apiKey && config.domain;
     const canSend = total > 0 && isValid && isConfigValid;
-    sendBtn.disabled = !canSend || sendingState !== 'idle';
+    sendBtn.disabled = !canSend || (sendingState !== 'idle' && sendingState !== 'complete');
     sendBtn.innerHTML = sendingState === 'sending' ? '<span class="spinner-border spinner-border-sm"></span> Sending...' : 'Send emails';
-    sendStatus.textContent = !canSend ? 'Disabled: requires contacts, valid template, and Mailgun configuration' : '';
+    sendStatus.textContent = !canSend ? 'Disabled: requires contacts, valid template, and Mailgun configuration' :
+        sendingState === 'complete' ? `Sending complete: ${sentCount} of ${totalContacts} emails sent` : '';
     progressDiv.classList.toggle('d-none', sendingState === 'idle');
     downloadBtn.classList.toggle('d-none', sendingState === 'idle');
     pauseBtn.textContent = sendingState === 'paused' ? 'Resume' : 'Pause';
     pauseBtn.classList.toggle('btn-warning', sendingState !== 'paused');
     pauseBtn.classList.toggle('btn-success', sendingState === 'paused');
+    pauseBtn.classList.toggle('d-none', sendingState === 'complete');
+    stopBtn.classList.toggle('d-none', sendingState === 'complete');
     sendingCard.classList.toggle('disabled', total === 0 || !isValid);
     sendingCard.classList.toggle('opacity-50', total === 0 || !isValid);
     if (sendingState !== 'idle') {
@@ -393,7 +408,7 @@ async function refreshTemplateView() {
     fields.forEach(field => {
         const input = document.getElementById(field);
         const value = input.value.trim();
-        const valid = isValidHandlebars(value);
+        const valid = field === 'recipient_cc' ? isValidHandlebarsOptional(value) : isValidHandlebars(value);
         input.classList.toggle('is-valid', valid);
         input.classList.toggle('is-invalid', !valid);
     });
@@ -446,8 +461,7 @@ async function refreshTemplateView() {
 async function sendEmails() {
     const progressBar = document.getElementById('sending-progress-bar');
     const etaText = document.getElementById('sending-eta');
-    const template = await templatesModel.get();
-    const { total } = await contactsModel.getPage(1, Number.MAX_SAFE_INTEGER);
+    const total = await contactsModel.getCount();
     sentCount = 0;
     totalContacts = total;
     const batchSize = Math.min(100, Math.ceil(total / 10)); // Optimize: 100 or 10% of total
@@ -458,7 +472,7 @@ async function sendEmails() {
         const { contacts } = await contactsModel.getPage(page, batchSize);
         if (contacts.length === 0) break;
 
-        const results = await sendingModel.sendBatch(contacts, template);
+        const results = await sendingModel.sendBatch(contacts);
         for (let i = 0; i < contacts.length; i++) {
             await contactsModel.updateContact(contacts[i].id, results[i]);
         }
@@ -478,10 +492,7 @@ async function sendEmails() {
     }
 
     if (sendingState !== 'idle') {
-        sendingState = 'idle';
-        sentCount = 0;
-        totalContacts = 0;
-        showError('Sending complete');
+        sendingState = 'complete';
         await refreshMain();
     }
 }

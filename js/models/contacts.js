@@ -66,8 +66,21 @@ export default class ContactsModel {
             keysToFetch.push(`contact:${i}`);
         }
 
-        const contacts = await getMany(keysToFetch);
+        const contactsData = await getMany(keysToFetch);
+        // Attach IDs to each contact object
+        const contacts = contactsData.map((contact, index) => ({
+            id: startId + index,
+            ...contact
+        }));
         return { contacts, total };
+    }
+
+    /**
+     * Gets the total number of contacts.
+     * @returns {Promise<number>} The total count of contacts.
+     */
+    async getCount() {
+        return (await get('contact-count')) || 0;
     }
 
     /**
@@ -102,7 +115,7 @@ export default class ContactsModel {
 
     /**
      * Clears all contact data from the database.
-     * This method iterates through all keys to preserve any non-contact data, as requested.
+     * This method iterates through all keys to preserve any non-contact data.
      */
     async clear() {
         const allDbEntries = await entries();
