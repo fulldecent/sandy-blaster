@@ -42,6 +42,8 @@ export default class TemplatesModel {
     }
 
     async set(template) {
+        // Invalidate compiled templates cache so they get recompiled on next render
+        this.#compiledTemplates = null;
         await set('template', template);
     }
 
