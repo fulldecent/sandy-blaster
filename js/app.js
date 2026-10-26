@@ -210,21 +210,18 @@ function setupEventListeners() {
     });
 
     // Template view navigation
-    document.getElementById('contact-prev').addEventListener('click', async () => {
-        if (currentContactPage > 1) {
-            currentContactPage--;
-            await refreshTemplateView();
-        }
-    });
-
-    document.getElementById('contact-next').addEventListener('click', async () => {
-        currentContactPage++;
-        await refreshTemplateView();
-    });
-
     document.getElementById('contact-random').addEventListener('click', async () => {
         const total = await contactsModel.getCount();
         currentContactPage = Math.floor(Math.random() * total) + 1;
+        await refreshTemplateView();
+    });
+
+    document.getElementById('contact-page-number').addEventListener('change', async e => {
+        const total = await contactsModel.getCount();
+        const requestedPage = e.target.valueAsNumber;
+        if (Number.isInteger(requestedPage) && total > 0) {
+            currentContactPage = Math.min(Math.max(requestedPage, 1), total);
+        }
         await refreshTemplateView();
     });
 
@@ -421,25 +418,26 @@ async function refreshTemplateView() {
 
     const { contacts, total } = await contactsModel.getPage(currentContactPage, contactPageSize);
     const selectorStatus = document.getElementById('contact-selector-status');
-    const pageInfo = document.getElementById('contact-page-info');
-    const prevBtn = document.getElementById('contact-prev');
-    const nextBtn = document.getElementById('contact-next');
+    const pageNumber = document.getElementById('contact-page-number');
+    const pageTotal = document.getElementById('contact-page-total');
     const randomBtn = document.getElementById('contact-random');
     const previewContent = document.getElementById('preview-content');
 
     if (total === 0) {
         selectorStatus.textContent = 'No contacts loaded. Preview is not available.';
-        pageInfo.textContent = '';
-        prevBtn.disabled = true;
-        nextBtn.disabled = true;
+        pageNumber.value = '';
+        pageNumber.max = 1;
+        pageNumber.disabled = true;
+        pageTotal.textContent = 'of 0';
         randomBtn.disabled = true;
         previewContent.innerHTML = '';
         currentContact = null;
     } else {
         selectorStatus.textContent = '';
-        pageInfo.textContent = `Contact ${currentContactPage} of ${total}`;
-        prevBtn.disabled = currentContactPage === 1;
-        nextBtn.disabled = currentContactPage === total;
+        pageNumber.value = currentContactPage;
+        pageNumber.max = total;
+        pageNumber.disabled = false;
+        pageTotal.textContent = `of ${total}`;
         randomBtn.disabled = false;
         currentContact = contacts[0];
         try {
