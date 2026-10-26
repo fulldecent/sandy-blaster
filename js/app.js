@@ -210,18 +210,6 @@ function setupEventListeners() {
     });
 
     // Template view navigation
-    document.getElementById('contact-prev').addEventListener('click', async () => {
-        if (currentContactPage > 1) {
-            currentContactPage--;
-            await refreshTemplateView();
-        }
-    });
-
-    document.getElementById('contact-next').addEventListener('click', async () => {
-        currentContactPage++;
-        await refreshTemplateView();
-    });
-
     document.getElementById('contact-random').addEventListener('click', async () => {
         const total = await contactsModel.getCount();
         currentContactPage = Math.floor(Math.random() * total) + 1;
@@ -432,8 +420,6 @@ async function refreshTemplateView() {
     const selectorStatus = document.getElementById('contact-selector-status');
     const pageNumber = document.getElementById('contact-page-number');
     const pageTotal = document.getElementById('contact-page-total');
-    const prevBtn = document.getElementById('contact-prev');
-    const nextBtn = document.getElementById('contact-next');
     const randomBtn = document.getElementById('contact-random');
     const previewContent = document.getElementById('preview-content');
 
@@ -443,8 +429,6 @@ async function refreshTemplateView() {
         pageNumber.max = 1;
         pageNumber.disabled = true;
         pageTotal.textContent = 'of 0';
-        prevBtn.disabled = true;
-        nextBtn.disabled = true;
         randomBtn.disabled = true;
         previewContent.innerHTML = '';
         currentContact = null;
@@ -454,8 +438,6 @@ async function refreshTemplateView() {
         pageNumber.max = total;
         pageNumber.disabled = false;
         pageTotal.textContent = `of ${total}`;
-        prevBtn.disabled = currentContactPage === 1;
-        nextBtn.disabled = currentContactPage === total;
         randomBtn.disabled = false;
         currentContact = contacts[0];
         try {
