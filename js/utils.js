@@ -1,5 +1,12 @@
-export function showError(message) {
-    alert(message);
+export function showError(error) {
+    console.error(error);
+    alert(error instanceof Error ? error.message : String(error));
+}
+
+export function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 export function downloadBlob(blob, filename) {

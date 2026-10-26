@@ -17,11 +17,22 @@ export default class TemplatesModel {
 
     #compiledTemplates = null;
 
+    // Returns a syntax error message, or null if the source parses
+    static getSyntaxError(source) {
+        try {
+            Handlebars.precompile(source);
+            return null;
+        } catch (err) {
+            return err.message;
+        }
+    }
+
+    // strict: missing variables throw instead of silently rendering as empty
     #compileTemplates(template) {
         return Object.fromEntries(
             TemplatesModel.TEMPLATE_FIELDS.map(field => [
                 field,
-                Handlebars.compile(template?.[field] || '')
+                Handlebars.compile(template?.[field] || '', { strict: true })
             ])
         );
     }
@@ -63,10 +74,13 @@ export default class TemplatesModel {
         }
 
         return Object.fromEntries(
-            TemplatesModel.TEMPLATE_FIELDS.map(field => [
-                field,
-                this.#compiledTemplates[field]?.(contact) || ''
-            ])
+            TemplatesModel.TEMPLATE_FIELDS.map(field => {
+                try {
+                    return [field, this.#compiledTemplates[field]?.(contact) || ''];
+                } catch (err) {
+                    throw new Error(`Failed to render "${field}": ${err.message}`, { cause: err });
+                }
+            })
         );
     }
 

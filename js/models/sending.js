@@ -1,5 +1,16 @@
 import { set, get } from 'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/+esm';
 
+// Config-level rejections (bad key, forbidden, unknown domain): every send would fail, so stop the run
+const FATAL_STATUSES = [401, 403, 404];
+// Other 4xx responses are final for that email; only these are worth retrying
+const RETRYABLE_STATUSES = [408, 429];
+const MAX_ATTEMPTS = 3;
+
+export class FatalSendError extends Error {
+    /** Results gathered before the abort; unattempted contacts are left undefined. */
+    results = [];
+}
+
 export default class SendingModel {
     #templatesModel = null;
 
@@ -26,11 +37,15 @@ export default class SendingModel {
      * Sends emails to a list of contacts, processed in parallel.
      * @param {object[]} contacts The list of contact objects to send to.
      * @returns {Promise<object[]>} An array of result objects for each contact.
+     * @throws {FatalSendError} On a config-level rejection; `results` holds what was attempted before the abort.
      */
     async sendBatch(contacts) {
         const PARALLELISM = 10;
         const config = await this.get();
         const results = new Array(contacts.length); // Preserve order by pre-allocating array
+        // Throws here (not per email) if the credentials can't be encoded
+        const authorization = `Basic ${btoa(`api:${config.apiKey}`)}`;
+        let fatalError = null;
 
         // Create a queue of tasks, pairing contact with its original index
         const queue = contacts.map((contact, index) => ({ contact, index }));
@@ -39,9 +54,17 @@ export default class SendingModel {
             const { contact, index } = task;
 
             // 1. Render all parts of the email for this specific contact
-            const rendered = await this.#templatesModel.render(contact);
-            if (!rendered || !rendered.sender_email || !rendered.recipient_email || !rendered.subject || !rendered.body) {
-                throw new Error('Template rendering failed or produced incomplete email fields.');
+            let rendered;
+            try {
+                rendered = await this.#templatesModel.render(contact);
+            } catch (err) {
+                results[index] = { sent_at: null, status: `failed: ${err.message}` };
+                return;
+            }
+            const missing = ['sender_email', 'recipient_email', 'subject', 'body'].filter(f => !rendered[f]?.trim());
+            if (missing.length > 0) {
+                results[index] = { sent_at: null, status: `failed: rendered empty ${missing.join(', ')}` };
+                return;
             }
 
             // 2. Prepare FormData for a single email
@@ -54,34 +77,37 @@ export default class SendingModel {
             formData.append('subject', rendered.subject);
             formData.append('html', rendered.body);
 
-            // 3. Attempt to send with retries
-            let attempts = 0;
-            while (attempts < 3) {
+            // 3. Attempt to send, retrying only transient failures
+            let lastError;
+            for (let attempt = 1; attempt <= MAX_ATTEMPTS && !fatalError; attempt++) {
+                let response;
                 try {
-                    const response = await fetch(`https://api.mailgun.net/v3/${config.domain}/messages`, {
+                    response = await fetch(`https://api.mailgun.net/v3/${config.domain}/messages`, {
                         method: 'POST',
-                        headers: {
-                            'Authorization': `Basic ${btoa(`api:${config.apiKey}`)}`,
-                        },
+                        headers: { 'Authorization': authorization },
                         body: formData,
                     });
+                } catch (err) {
+                    lastError = err; // Network failure: transient
+                    continue;
+                }
 
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`HTTP ${response.status}: ${errorText}`);
-                    }
-
-                    // Success: store result and stop retrying
+                if (response.ok) {
                     results[index] = { sent_at: new Date().toISOString(), status: 'sent' };
                     return;
-
-                } catch (err) {
-                    attempts++;
-                    if (attempts === 3) {
-                        // All retries failed
-                        results[index] = { sent_at: null, status: `failed: ${err.message}` };
-                    }
                 }
+
+                const message = `HTTP ${response.status}: ${await response.text()}`;
+                if (FATAL_STATUSES.includes(response.status)) {
+                    fatalError ??= new FatalSendError(message);
+                    return;
+                }
+                lastError = new Error(message);
+                const transient = response.status >= 500 || RETRYABLE_STATUSES.includes(response.status);
+                if (!transient) break;
+            }
+            if (lastError) {
+                results[index] = { sent_at: null, status: `failed: ${lastError.message}` };
             }
         };
 
@@ -89,7 +115,7 @@ export default class SendingModel {
         const workers = [];
         for (let i = 0; i < PARALLELISM; i++) {
             const worker = (async () => {
-                while (queue.length > 0) {
+                while (queue.length > 0 && !fatalError) {
                     const task = queue.shift();
                     if (task) {
                         await processContact(task);
@@ -101,6 +127,10 @@ export default class SendingModel {
 
         await Promise.all(workers);
 
+        if (fatalError) {
+            fatalError.results = results;
+            throw fatalError;
+        }
         return results;
     }
 }

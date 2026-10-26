@@ -1,8 +1,7 @@
 import ContactsModel from './models/contacts.js';
 import TemplatesModel from './models/templates.js';
-import SendingModel from './models/sending.js';
-import { showError, downloadBlob } from './utils.js';
-import Handlebars from 'https://cdn.jsdelivr.net/npm/handlebars@4.7.8/+esm';
+import SendingModel, { FatalSendError } from './models/sending.js';
+import { showError, downloadBlob, escapeHtml } from './utils.js';
 
 const contactsModel = new ContactsModel();
 const templatesModel = new TemplatesModel();
@@ -12,7 +11,12 @@ const contactPageSize = 1;
 let currentContact = null;
 let sendingState = 'idle'; // idle, sending, paused, complete
 let sentCount = 0;
+let failedCount = 0;
 let totalContacts = 0;
+
+// Catch-all so no failure goes unreported
+window.addEventListener('unhandledrejection', e => showError(e.reason));
+window.addEventListener('error', e => showError(e.error ?? e.message));
 
 async function init() {
     try {
@@ -246,9 +250,16 @@ function setupEventListeners() {
         if (window.confirm('Send emails to all contacts?')) {
             sendingState = 'sending';
             sentCount = 0;
+            failedCount = 0;
             totalContacts = 0;
             await refreshMain();
-            await sendEmails();
+            try {
+                await sendEmails();
+            } catch (err) {
+                sendingState = 'idle';
+                await refreshMain();
+                showError(`Sending aborted after ${sentCount} of ${totalContacts} contacts: ${err.message}`);
+            }
         }
     });
 
@@ -260,6 +271,7 @@ function setupEventListeners() {
     document.getElementById('sending-stop').addEventListener('click', async () => {
         sendingState = 'idle';
         sentCount = 0;
+        failedCount = 0;
         totalContacts = 0;
         await refreshMain();
     });
@@ -284,24 +296,29 @@ async function switchView(view) {
 }
 
 function isValidHandlebars(str) {
-    if (!str.trim()) return false;
-    try {
-        Handlebars.compile(str)({});
-        return true;
-    } catch {
-        return false;
-    }
+    return fieldError(str, false) === null;
 }
 
 function isValidHandlebarsOptional(str) {
-    // Optional fields can be empty
-    if (!str.trim()) return true;
-    try {
-        Handlebars.compile(str)({});
-        return true;
-    } catch {
-        return false;
+    return fieldError(str, true) === null;
+}
+
+// Returns a human-readable problem with a template field, or null if valid
+function fieldError(str, optional) {
+    if (!str.trim()) return optional ? null : 'This field is required';
+    return TemplatesModel.getSyntaxError(str);
+}
+
+function setFieldValidity(input, error) {
+    input.classList.toggle('is-valid', error === null);
+    input.classList.toggle('is-invalid', error !== null);
+    let feedback = input.nextElementSibling;
+    if (!feedback?.classList.contains('invalid-feedback')) {
+        feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        input.insertAdjacentElement('afterend', feedback);
     }
+    feedback.textContent = error ?? '';
 }
 
 async function refreshMain() {
@@ -349,7 +366,8 @@ async function refreshMain() {
     sendBtn.disabled = !canSend || (sendingState !== 'idle' && sendingState !== 'complete');
     sendBtn.innerHTML = sendingState === 'sending' ? '<span class="spinner-border spinner-border-sm"></span> Sending...' : 'Send emails';
     sendStatus.textContent = !canSend ? 'Disabled: requires contacts, valid template, and Mailgun configuration' :
-        sendingState === 'complete' ? `Sending complete: ${sentCount} of ${totalContacts} emails sent` : '';
+        sendingState === 'complete' ? `Sending complete: ${sentCount - failedCount} of ${totalContacts} emails sent` +
+            (failedCount > 0 ? `, ${failedCount} failed (see sending report)` : '') : '';
     progressDiv.classList.toggle('d-none', sendingState === 'idle');
     downloadBtn.classList.toggle('d-none', sendingState === 'idle');
     pauseBtn.textContent = sendingState === 'paused' ? 'Resume' : 'Pause';
@@ -404,17 +422,11 @@ async function refreshTemplateView() {
     const fields = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc'];
     fields.forEach(field => {
         const input = document.getElementById(field);
-        const value = input.value.trim();
-        const valid = field === 'recipient_cc' ? isValidHandlebarsOptional(value) : isValidHandlebars(value);
-        input.classList.toggle('is-valid', valid);
-        input.classList.toggle('is-invalid', !valid);
+        setFieldValidity(input, fieldError(input.value, field === 'recipient_cc'));
     });
 
     const bodyInput = document.getElementById('template-text');
-    const bodyValue = bodyInput.value.trim();
-    const bodyValid = isValidHandlebars(bodyValue);
-    bodyInput.classList.toggle('is-valid', bodyValid);
-    bodyInput.classList.toggle('is-invalid', !bodyValid);
+    setFieldValidity(bodyInput, fieldError(bodyInput.value, false));
 
     const { contacts, total } = await contactsModel.getPage(currentContactPage, contactPageSize);
     const selectorStatus = document.getElementById('contact-selector-status');
@@ -451,7 +463,7 @@ async function refreshTemplateView() {
         <div><strong>Body:</strong><div>${preview.body}</div></div>
       `;
         } catch (err) {
-            previewContent.innerHTML = '<p class="text-muted">Invalid template for preview</p>';
+            previewContent.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
         }
     }
 }
@@ -461,6 +473,7 @@ async function sendEmails() {
     const etaText = document.getElementById('sending-eta');
     const total = await contactsModel.getCount();
     sentCount = 0;
+    failedCount = 0;
     totalContacts = total;
     const batchSize = Math.min(100, Math.ceil(total / 10)); // Optimize: 100 or 10% of total
 
@@ -470,16 +483,26 @@ async function sendEmails() {
         const { contacts } = await contactsModel.getPage(page, batchSize);
         if (contacts.length === 0) break;
 
-        const results = await sendingModel.sendBatch(contacts);
-        for (let i = 0; i < contacts.length; i++) {
-            await contactsModel.updateContact(contacts[i].id, results[i]);
+        let results, fatalError = null;
+        try {
+            results = await sendingModel.sendBatch(contacts);
+        } catch (err) {
+            if (!(err instanceof FatalSendError)) throw err;
+            fatalError = err;
+            results = err.results;
         }
-
-        sentCount += contacts.length;
+        // On a fatal error, unattempted contacts have no result and stay unsent
+        for (let i = 0; i < contacts.length; i++) {
+            if (results[i]) await contactsModel.updateContact(contacts[i].id, results[i]);
+        }
+        const attempted = results.filter(Boolean);
+        sentCount += attempted.length;
+        failedCount += attempted.filter(r => r.status.startsWith('failed')).length;
+        if (fatalError) throw fatalError;
         progressBar.style.width = `${(sentCount / total) * 100}%`;
         const elapsed = (Date.now() - startTime) / 1000;
         const eta = ((total - sentCount) * elapsed) / sentCount;
-        etaText.textContent = `ETA: ${Math.round(eta)} seconds`;
+        etaText.textContent = `ETA: ${Math.round(eta)} seconds` + (failedCount > 0 ? ` (${failedCount} failed)` : '');
         page++;
 
         if (sendingState === 'paused') {
