@@ -168,7 +168,12 @@
                 <div class="col">
                     <h2>Preview</h2>
                     <p id="contact-selector-status"></p>
-                    <p id="contact-page-info"></p>
+                    <div class="input-group mb-2" style="max-width: 16rem;">
+                        <span class="input-group-text">Contact</span>
+                        <input id="contact-page-number" class="form-control" type="number" min="1" step="1"
+                            aria-label="Contact number" disabled>
+                        <span id="contact-page-total" class="input-group-text">of 0</span>
+                    </div>
                     <div class="mb-3">
                         <button id="contact-prev" class="btn btn-secondary" disabled>←</button>
                         <button id="contact-next" class="btn btn-secondary" disabled>→</button>

@@ -228,6 +228,15 @@ function setupEventListeners() {
         await refreshTemplateView();
     });
 
+    document.getElementById('contact-page-number').addEventListener('change', async e => {
+        const total = await contactsModel.getCount();
+        const requestedPage = e.target.valueAsNumber;
+        if (Number.isInteger(requestedPage)) {
+            currentContactPage = Math.min(Math.max(requestedPage, 1), total);
+        }
+        await refreshTemplateView();
+    });
+
     // Sending card
     document.getElementById('sending-config').addEventListener('input', async e => {
         const form = document.getElementById('sending-config');
@@ -421,7 +430,8 @@ async function refreshTemplateView() {
 
     const { contacts, total } = await contactsModel.getPage(currentContactPage, contactPageSize);
     const selectorStatus = document.getElementById('contact-selector-status');
-    const pageInfo = document.getElementById('contact-page-info');
+    const pageNumber = document.getElementById('contact-page-number');
+    const pageTotal = document.getElementById('contact-page-total');
     const prevBtn = document.getElementById('contact-prev');
     const nextBtn = document.getElementById('contact-next');
     const randomBtn = document.getElementById('contact-random');
@@ -429,7 +439,10 @@ async function refreshTemplateView() {
 
     if (total === 0) {
         selectorStatus.textContent = 'No contacts loaded. Preview is not available.';
-        pageInfo.textContent = '';
+        pageNumber.value = '';
+        pageNumber.max = 1;
+        pageNumber.disabled = true;
+        pageTotal.textContent = 'of 0';
         prevBtn.disabled = true;
         nextBtn.disabled = true;
         randomBtn.disabled = true;
@@ -437,7 +450,10 @@ async function refreshTemplateView() {
         currentContact = null;
     } else {
         selectorStatus.textContent = '';
-        pageInfo.textContent = `Contact ${currentContactPage} of ${total}`;
+        pageNumber.value = currentContactPage;
+        pageNumber.max = total;
+        pageNumber.disabled = false;
+        pageTotal.textContent = `of ${total}`;
         prevBtn.disabled = currentContactPage === 1;
         nextBtn.disabled = currentContactPage === total;
         randomBtn.disabled = false;
