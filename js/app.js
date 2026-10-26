@@ -231,7 +231,7 @@ function setupEventListeners() {
     document.getElementById('contact-page-number').addEventListener('change', async e => {
         const total = await contactsModel.getCount();
         const requestedPage = e.target.valueAsNumber;
-        if (Number.isInteger(requestedPage)) {
+        if (Number.isInteger(requestedPage) && total > 0) {
             currentContactPage = Math.min(Math.max(requestedPage, 1), total);
         }
         await refreshTemplateView();
