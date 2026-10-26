@@ -166,7 +166,7 @@ function setupEventListeners() {
             const columns = await contactsModel.getColumns();
             if (columns.length > 0) {
                 buttons.innerHTML = columns.map(col =>
-                    `<button class="btn btn-outline-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
+                    `<button class="btn-outline theme-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
                 ).join('');
                 buttons.style.display = 'block';
                 const parent = input.parentElement;
@@ -364,15 +364,15 @@ async function refreshMain() {
     const isConfigValid = config.apiKey && config.domain;
     const canSend = total > 0 && isValid && isConfigValid;
     sendBtn.disabled = !canSend || (sendingState !== 'idle' && sendingState !== 'complete');
-    sendBtn.innerHTML = sendingState === 'sending' ? '<span class="spinner-border spinner-border-sm"></span> Sending...' : 'Send emails';
+    sendBtn.innerHTML = sendingState === 'sending' ? '<span class="spinner-border spinner-sm"></span> Sending...' : 'Send emails';
     sendStatus.textContent = !canSend ? 'Disabled: requires contacts, valid template, and Mailgun configuration' :
         sendingState === 'complete' ? `Sending complete: ${sentCount - failedCount} of ${totalContacts} emails sent` +
             (failedCount > 0 ? `, ${failedCount} failed (see sending report)` : '') : '';
     progressDiv.classList.toggle('d-none', sendingState === 'idle');
     downloadBtn.classList.toggle('d-none', sendingState === 'idle');
     pauseBtn.textContent = sendingState === 'paused' ? 'Resume' : 'Pause';
-    pauseBtn.classList.toggle('btn-warning', sendingState !== 'paused');
-    pauseBtn.classList.toggle('btn-success', sendingState === 'paused');
+    pauseBtn.classList.toggle('theme-warning', sendingState !== 'paused');
+    pauseBtn.classList.toggle('theme-success', sendingState === 'paused');
     pauseBtn.classList.toggle('d-none', sendingState === 'complete');
     stopBtn.classList.toggle('d-none', sendingState === 'complete');
     sendingCard.classList.toggle('disabled', total === 0 || !isValid);
@@ -401,8 +401,8 @@ async function refreshTemplateView() {
     const columns = await contactsModel.getColumns();
     const columnButtons = document.getElementById('column-buttons');
     columnButtons.innerHTML = columns.length > 0 ? columns.map(col =>
-        `<button class="btn btn-outline-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
-    ).join('') : '<p class="text-muted">No contact columns available</p>';
+        `<button class="btn-outline theme-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
+    ).join('') : '<p class="fg-secondary">No contact columns available</p>';
 
     document.querySelectorAll('.mode-select').forEach(select => {
         const field = select.dataset.field;
@@ -463,7 +463,7 @@ async function refreshTemplateView() {
         <div><strong>Body:</strong><div>${preview.body}</div></div>
       `;
         } catch (err) {
-            previewContent.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
+            previewContent.innerHTML = `<div class="alert theme-danger">${escapeHtml(err.message)}</div>`;
         }
     }
 }
