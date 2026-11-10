@@ -26,7 +26,7 @@ This is a web application for sending bulk emails using the Mailgun API. It enab
 
 ## Project Structure
 
-```
+```text
 project/
 ├── index.html              # Main HTML with card-based UI for contacts, templates, and sending
 ├── js/
@@ -83,8 +83,6 @@ project/
   - Disable navigation if no contacts are loaded.
 - **Model**: `templates.js`
 - **UI**: Preview section in the template view with navigation buttons and rendered email content.
-
-### Email sending
 
 ### Email sending
 

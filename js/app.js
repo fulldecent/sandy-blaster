@@ -1,7 +1,7 @@
-import ContactsModel from './models/contacts.js';
-import TemplatesModel from './models/templates.js';
-import SendingModel, { FatalSendError } from './models/sending.js';
-import { showError, downloadBlob, escapeHtml } from './utils.js';
+import ContactsModel from "./models/contacts.js";
+import TemplatesModel from "./models/templates.js";
+import SendingModel, { FatalSendError } from "./models/sending.js";
+import { showError, downloadBlob, escapeHtml } from "./utils.js";
 
 const contactsModel = new ContactsModel();
 const templatesModel = new TemplatesModel();
@@ -9,513 +9,544 @@ const sendingModel = new SendingModel(templatesModel);
 let currentContactPage = 1;
 const contactPageSize = 1;
 let currentContact = null;
-let sendingState = 'idle'; // idle, sending, paused, complete
+let sendingState = "idle"; // idle, sending, paused, complete
 let sentCount = 0;
 let failedCount = 0;
 let totalContacts = 0;
 
 // Catch-all so no failure goes unreported
-window.addEventListener('unhandledrejection', e => showError(e.reason));
-window.addEventListener('error', e => showError(e.error ?? e.message));
+window.addEventListener("unhandledrejection", (e) => showError(e.reason));
+window.addEventListener("error", (e) => showError(e.error ?? e.message));
 
 async function init() {
-    try {
-        console.log('Initializing application');
+  try {
+    console.log("Initializing application");
 
-        // Set up event listeners and refresh views
-        setupEventListeners();
-        await loadConfig();
-        await Promise.all([
-            refreshMain(),
-            refreshTemplateView()
-        ]);
+    // Set up event listeners and refresh views
+    setupEventListeners();
+    await loadConfig();
+    await Promise.all([refreshMain(), refreshTemplateView()]);
 
-        // Don't hurt people's eyes
-        const matchPrefersLight = window.matchMedia('(prefers-color-scheme:light)');
-        if (matchPrefersLight.matches) {
-            document.documentElement.setAttribute('data-bs-theme', 'light');
-        }
-        matchPrefersLight.addEventListener('change', event => {
-            document.documentElement.setAttribute('data-bs-theme', event.matches ? "light" : "dark");
-        });
-    } catch (error) {
-        console.error('Initialization failed:', error);
-        showError('Failed to initialize application: ' + error.message);
+    // Don't hurt people's eyes
+    const matchPrefersLight = window.matchMedia("(prefers-color-scheme:light)");
+    if (matchPrefersLight.matches) {
+      document.documentElement.setAttribute("data-bs-theme", "light");
     }
+    matchPrefersLight.addEventListener("change", (event) => {
+      document.documentElement.setAttribute("data-bs-theme", event.matches ? "light" : "dark");
+    });
+  } catch (error) {
+    console.error("Initialization failed:", error);
+    showError("Failed to initialize application: " + error.message);
+  }
 }
 
 async function loadConfig() {
-    const config = await sendingModel.get();
-    document.getElementById('apiKey').value = config.apiKey;
-    document.getElementById('domain').value = config.domain;
-    updateConfigValidation();
+  const config = await sendingModel.get();
+  document.getElementById("apiKey").value = config.apiKey;
+  document.getElementById("domain").value = config.domain;
+  updateConfigValidation();
 }
 
 function updateConfigValidation() {
-    const apiKeyInput = document.getElementById('apiKey');
-    const domainInput = document.getElementById('domain');
-    const apiKeyValid = apiKeyInput.value.trim() !== '';
-    apiKeyInput.classList.toggle('is-valid', apiKeyValid);
-    apiKeyInput.classList.toggle('is-invalid', !apiKeyValid);
-    const domainValid = domainInput.value.trim() !== '';
-    domainInput.classList.toggle('is-valid', domainValid);
-    domainInput.classList.toggle('is-invalid', !domainValid);
+  const apiKeyInput = document.getElementById("apiKey");
+  const domainInput = document.getElementById("domain");
+  const apiKeyValid = apiKeyInput.value.trim() !== "";
+  apiKeyInput.classList.toggle("is-valid", apiKeyValid);
+  apiKeyInput.classList.toggle("is-invalid", !apiKeyValid);
+  const domainValid = domainInput.value.trim() !== "";
+  domainInput.classList.toggle("is-valid", domainValid);
+  domainInput.classList.toggle("is-invalid", !domainValid);
 }
 
 function setupEventListeners() {
-    document.getElementById('breadcrumbs').addEventListener('click', async e => {
-        if (e.target.tagName === 'A') {
-            e.preventDefault();
-            const view = e.target.dataset.view;
-            await switchView(view);
-        }
-    });
+  document.getElementById("breadcrumbs").addEventListener("click", async (e) => {
+    if (e.target.tagName === "A") {
+      e.preventDefault();
+      const view = e.target.dataset.view;
+      await switchView(view);
+    }
+  });
 
-    // Contacts card
-    document.getElementById('contacts-load').addEventListener('click', () => {
-        document.getElementById('contacts-upload').click();
-    });
+  // Contacts card
+  document.getElementById("contacts-load").addEventListener("click", () => {
+    document.getElementById("contacts-upload").click();
+  });
 
-    document.getElementById('contacts-upload').addEventListener('change', async e => {
-        try {
-            await contactsModel.loadCSV(e.target.files[0]);
-            await refreshMain();
-            await refreshTemplateView();
-        } catch (err) {
-            showError(err.message);
-        }
-    });
+  document.getElementById("contacts-upload").addEventListener("change", async (e) => {
+    try {
+      await contactsModel.loadCSV(e.target.files[0]);
+      await refreshMain();
+      await refreshTemplateView();
+    } catch (err) {
+      showError(err.message);
+    }
+  });
 
-    document.getElementById('contacts-clear').addEventListener('click', async () => {
-        if (window.confirm('Clear all contacts?')) {
-            await contactsModel.clear();
-            currentContactPage = 1;
-            currentContact = null;
-            await refreshMain();
-            await refreshTemplateView();
-        }
-    });
+  document.getElementById("contacts-clear").addEventListener("click", async () => {
+    if (window.confirm("Clear all contacts?")) {
+      await contactsModel.clear();
+      currentContactPage = 1;
+      currentContact = null;
+      await refreshMain();
+      await refreshTemplateView();
+    }
+  });
 
-    // Template card
-    document.getElementById('template-load').addEventListener('click', () => {
-        document.getElementById('template-upload').click();
-    });
+  // Template card
+  document.getElementById("template-load").addEventListener("click", () => {
+    document.getElementById("template-upload").click();
+  });
 
-    document.getElementById('template-upload').addEventListener('change', async e => {
-        try {
-            await templatesModel.loadJSON(e.target.files[0]);
-            await refreshMain();
-            await refreshTemplateView();
-        } catch (err) {
-            showError(err.message);
-        }
-    });
+  document.getElementById("template-upload").addEventListener("change", async (e) => {
+    try {
+      await templatesModel.loadJSON(e.target.files[0]);
+      await refreshMain();
+      await refreshTemplateView();
+    } catch (err) {
+      showError(err.message);
+    }
+  });
 
-    document.getElementById('template-edit').addEventListener('click', async () => {
-        await switchView('template');
-    });
+  document.getElementById("template-edit").addEventListener("click", async () => {
+    await switchView("template");
+  });
 
-    document.getElementById('template-download').addEventListener('click', async () => {
-        try {
-            const blob = await templatesModel.exportJSON();
-            downloadBlob(blob, 'template.json');
-        } catch (err) {
-            showError(err.message);
-        }
-    });
+  document.getElementById("template-download").addEventListener("click", async () => {
+    try {
+      const blob = await templatesModel.exportJSON();
+      downloadBlob(blob, "template.json");
+    } catch (err) {
+      showError(err.message);
+    }
+  });
 
-    document.getElementById('template-clear').addEventListener('click', async () => {
-        if (window.confirm('Clear template?')) {
-            await templatesModel.clear();
-            await refreshMain();
-            await refreshTemplateView();
-        }
-    });
+  document.getElementById("template-clear").addEventListener("click", async () => {
+    if (window.confirm("Clear template?")) {
+      await templatesModel.clear();
+      await refreshMain();
+      await refreshTemplateView();
+    }
+  });
 
-    // Template view: Real-time saving and column buttons
-    const templateInputs = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc', 'template-text'];
-    templateInputs.forEach(id => {
-        const input = document.getElementById(id);
-        input.addEventListener('input', async () => {
-            try {
-                const template = {
-                    sender_name: document.getElementById('sender_name').value,
-                    sender_email: document.getElementById('sender_email').value,
-                    subject: document.getElementById('subject').value,
-                    recipient_name: document.getElementById('recipient_name').value,
-                    recipient_email: document.getElementById('recipient_email').value,
-                    recipient_cc: document.getElementById('recipient_cc').value,
-                    body: document.getElementById('template-text').value
-                };
-                await templatesModel.set(template);
-                await refreshTemplateView();
-            } catch (err) {
-                showError(err.message);
-            }
-        });
-    });
-
-    // Column buttons
-    const buttons = document.getElementById('column-buttons');
-    buttons.style.display = 'none';
-    let focusedInput = null;
-    const templateInputElements = templateInputs.map(id => document.getElementById(id));
-    templateInputElements.forEach(input => {
-        input.addEventListener('focus', async () => {
-            focusedInput = input;
-            const columns = await contactsModel.getColumns();
-            if (columns.length > 0) {
-                buttons.innerHTML = columns.map(col =>
-                    `<button class="btn-outline theme-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
-                ).join('');
-                buttons.style.display = 'block';
-                const parent = input.parentElement;
-                parent.insertBefore(buttons, input);
-            } else {
-                buttons.style.display = 'none';
-            }
-        });
-        input.addEventListener('blur', () => {
-            setTimeout(() => {
-                if (document.activeElement !== focusedInput && !buttons.contains(document.activeElement)) {
-                    buttons.style.display = 'none';
-                    focusedInput = null;
-                }
-            }, 100);
-        });
-    });
-
-    buttons.addEventListener('click', e => {
-        if (e.target.classList.contains('column-btn')) {
-            const column = e.target.dataset.column;
-            if (focusedInput) {
-                focusedInput.value += `{{${column}}}`;
-                focusedInput.focus();
-                focusedInput.selectionStart = focusedInput.selectionEnd = focusedInput.value.length;
-                focusedInput.dispatchEvent(new Event('input'));
-            }
-        }
-    });
-
-    // Mode and column dropdowns
-    document.querySelectorAll('.mode-select').forEach(select => {
-        select.addEventListener('change', async () => {
-            const field = select.dataset.field;
-            const input = document.getElementById(field);
-            const value = select.value;
-            if (value === 'handlebars') {
-                input.value = '';
-            } else if (value.startsWith('column_')) {
-                const col = value.slice(7);
-                input.value = `{{${col}}}`;
-            }
-            input.dispatchEvent(new Event('input'));
-        });
-    });
-
-    // Template view navigation
-    document.getElementById('contact-random').addEventListener('click', async () => {
-        const total = await contactsModel.getCount();
-        currentContactPage = Math.floor(Math.random() * total) + 1;
-        await refreshTemplateView();
-    });
-
-    document.getElementById('contact-page-number').addEventListener('change', async e => {
-        const total = await contactsModel.getCount();
-        const requestedPage = e.target.valueAsNumber;
-        if (Number.isInteger(requestedPage) && total > 0) {
-            currentContactPage = Math.min(Math.max(requestedPage, 1), total);
-        }
-        await refreshTemplateView();
-    });
-
-    // Sending card
-    document.getElementById('sending-config').addEventListener('input', async e => {
-        const form = document.getElementById('sending-config');
-        const formData = new FormData(form);
-        const config = {
-            apiKey: formData.get('apiKey'),
-            domain: formData.get('domain')
+  // Template view: Real-time saving and column buttons
+  const templateInputs = [
+    "sender_name",
+    "sender_email",
+    "subject",
+    "recipient_name",
+    "recipient_email",
+    "recipient_cc",
+    "template-text",
+  ];
+  templateInputs.forEach((id) => {
+    const input = document.getElementById(id);
+    input.addEventListener("input", async () => {
+      try {
+        const template = {
+          sender_name: document.getElementById("sender_name").value,
+          sender_email: document.getElementById("sender_email").value,
+          subject: document.getElementById("subject").value,
+          recipient_name: document.getElementById("recipient_name").value,
+          recipient_email: document.getElementById("recipient_email").value,
+          recipient_cc: document.getElementById("recipient_cc").value,
+          body: document.getElementById("template-text").value,
         };
-        try {
-            await sendingModel.set(config);
-            updateConfigValidation();
-            await refreshMain();
-        } catch (err) {
-            showError(err.message);
-        }
+        await templatesModel.set(template);
+        await refreshTemplateView();
+      } catch (err) {
+        showError(err.message);
+      }
     });
+  });
 
-    document.getElementById('sending-send').addEventListener('click', async () => {
-        if (window.confirm('Send emails to all contacts?')) {
-            sendingState = 'sending';
-            sentCount = 0;
-            failedCount = 0;
-            totalContacts = 0;
-            await refreshMain();
-            try {
-                await sendEmails();
-            } catch (err) {
-                sendingState = 'idle';
-                await refreshMain();
-                showError(`Sending aborted after ${sentCount} of ${totalContacts} contacts: ${err.message}`);
-            }
-        }
+  // Column buttons
+  const buttons = document.getElementById("column-buttons");
+  buttons.style.display = "none";
+  let focusedInput = null;
+  const templateInputElements = templateInputs.map((id) => document.getElementById(id));
+  templateInputElements.forEach((input) => {
+    input.addEventListener("focus", async () => {
+      focusedInput = input;
+      const columns = await contactsModel.getColumns();
+      if (columns.length > 0) {
+        buttons.innerHTML = columns
+          .map(
+            (col) =>
+              `<button class="btn-outline theme-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`,
+          )
+          .join("");
+        buttons.style.display = "block";
+        const parent = input.parentElement;
+        parent.insertBefore(buttons, input);
+      } else {
+        buttons.style.display = "none";
+      }
     });
+    input.addEventListener("blur", () => {
+      setTimeout(() => {
+        if (document.activeElement !== focusedInput && !buttons.contains(document.activeElement)) {
+          buttons.style.display = "none";
+          focusedInput = null;
+        }
+      }, 100);
+    });
+  });
 
-    document.getElementById('sending-pause').addEventListener('click', async () => {
-        sendingState = sendingState === 'paused' ? 'sending' : 'paused';
+  buttons.addEventListener("click", (e) => {
+    if (e.target.classList.contains("column-btn")) {
+      const column = e.target.dataset.column;
+      if (focusedInput) {
+        focusedInput.value += `{{${column}}}`;
+        focusedInput.focus();
+        focusedInput.selectionStart = focusedInput.selectionEnd = focusedInput.value.length;
+        focusedInput.dispatchEvent(new Event("input"));
+      }
+    }
+  });
+
+  // Mode and column dropdowns
+  document.querySelectorAll(".mode-select").forEach((select) => {
+    select.addEventListener("change", async () => {
+      const field = select.dataset.field;
+      const input = document.getElementById(field);
+      const value = select.value;
+      if (value === "handlebars") {
+        input.value = "";
+      } else if (value.startsWith("column_")) {
+        const col = value.slice(7);
+        input.value = `{{${col}}}`;
+      }
+      input.dispatchEvent(new Event("input"));
+    });
+  });
+
+  // Template view navigation
+  document.getElementById("contact-random").addEventListener("click", async () => {
+    const total = await contactsModel.getCount();
+    currentContactPage = Math.floor(Math.random() * total) + 1;
+    await refreshTemplateView();
+  });
+
+  document.getElementById("contact-page-number").addEventListener("change", async (e) => {
+    const total = await contactsModel.getCount();
+    const requestedPage = e.target.valueAsNumber;
+    if (Number.isInteger(requestedPage) && total > 0) {
+      currentContactPage = Math.min(Math.max(requestedPage, 1), total);
+    }
+    await refreshTemplateView();
+  });
+
+  // Sending card
+  document.getElementById("sending-config").addEventListener("input", async (e) => {
+    const form = document.getElementById("sending-config");
+    const formData = new FormData(form);
+    const config = {
+      apiKey: formData.get("apiKey"),
+      domain: formData.get("domain"),
+    };
+    try {
+      await sendingModel.set(config);
+      updateConfigValidation();
+      await refreshMain();
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  document.getElementById("sending-send").addEventListener("click", async () => {
+    if (window.confirm("Send emails to all contacts?")) {
+      sendingState = "sending";
+      sentCount = 0;
+      failedCount = 0;
+      totalContacts = 0;
+      await refreshMain();
+      try {
+        await sendEmails();
+      } catch (err) {
+        sendingState = "idle";
         await refreshMain();
-    });
+        showError(`Sending aborted after ${sentCount} of ${totalContacts} contacts: ${err.message}`);
+      }
+    }
+  });
 
-    document.getElementById('sending-stop').addEventListener('click', async () => {
-        sendingState = 'idle';
-        sentCount = 0;
-        failedCount = 0;
-        totalContacts = 0;
-        await refreshMain();
-    });
+  document.getElementById("sending-pause").addEventListener("click", async () => {
+    sendingState = sendingState === "paused" ? "sending" : "paused";
+    await refreshMain();
+  });
 
-    document.getElementById('sending-download').addEventListener('click', async () => {
-        try {
-            const blob = await contactsModel.exportCSV();
-            downloadBlob(blob, 'report.csv');
-        } catch (err) {
-            showError(err.message);
-        }
-    });
+  document.getElementById("sending-stop").addEventListener("click", async () => {
+    sendingState = "idle";
+    sentCount = 0;
+    failedCount = 0;
+    totalContacts = 0;
+    await refreshMain();
+  });
+
+  document.getElementById("sending-download").addEventListener("click", async () => {
+    try {
+      const blob = await contactsModel.exportCSV();
+      downloadBlob(blob, "report.csv");
+    } catch (err) {
+      showError(err.message);
+    }
+  });
 }
 
 async function switchView(view) {
-    document.getElementById('main-view').classList.toggle('d-none', view !== 'main');
-    document.getElementById('template-view').classList.toggle('d-none', view !== 'template');
-    const breadcrumbs = document.getElementById('breadcrumbs');
-    breadcrumbs.classList.toggle('d-none', view === 'main');
-    if (view === 'main') await refreshMain();
-    if (view === 'template') await refreshTemplateView();
+  document.getElementById("main-view").classList.toggle("d-none", view !== "main");
+  document.getElementById("template-view").classList.toggle("d-none", view !== "template");
+  const breadcrumbs = document.getElementById("breadcrumbs");
+  breadcrumbs.classList.toggle("d-none", view === "main");
+  if (view === "main") await refreshMain();
+  if (view === "template") await refreshTemplateView();
 }
 
 function isValidHandlebars(str) {
-    return fieldError(str, false) === null;
+  return fieldError(str, false) === null;
 }
 
 function isValidHandlebarsOptional(str) {
-    return fieldError(str, true) === null;
+  return fieldError(str, true) === null;
 }
 
 // Returns a human-readable problem with a template field, or null if valid
 function fieldError(str, optional) {
-    if (!str.trim()) return optional ? null : 'This field is required';
-    return TemplatesModel.getSyntaxError(str);
+  if (!str.trim()) return optional ? null : "This field is required";
+  return TemplatesModel.getSyntaxError(str);
 }
 
 function setFieldValidity(input, error) {
-    input.classList.toggle('is-valid', error === null);
-    input.classList.toggle('is-invalid', error !== null);
-    let feedback = input.nextElementSibling;
-    if (!feedback?.classList.contains('invalid-feedback')) {
-        feedback = document.createElement('div');
-        feedback.className = 'invalid-feedback';
-        input.insertAdjacentElement('afterend', feedback);
-    }
-    feedback.textContent = error ?? '';
+  input.classList.toggle("is-valid", error === null);
+  input.classList.toggle("is-invalid", error !== null);
+  let feedback = input.nextElementSibling;
+  if (!feedback?.classList.contains("invalid-feedback")) {
+    feedback = document.createElement("div");
+    feedback.className = "invalid-feedback";
+    input.insertAdjacentElement("afterend", feedback);
+  }
+  feedback.textContent = error ?? "";
 }
 
 async function refreshMain() {
-    // Contacts card
-    const total = await contactsModel.getCount();
-    const contactsStatus = document.getElementById('contacts-status');
-    const contactsClear = document.getElementById('contacts-clear');
-    const contactsLoad = document.getElementById('contacts-load');
-    contactsStatus.textContent = total === 0 ? 'No contacts loaded' : `${total} contacts loaded`;
-    contactsClear.classList.toggle('d-none', total === 0);
-    contactsLoad.classList.toggle('d-none', total !== 0);
+  // Contacts card
+  const total = await contactsModel.getCount();
+  const contactsStatus = document.getElementById("contacts-status");
+  const contactsClear = document.getElementById("contacts-clear");
+  const contactsLoad = document.getElementById("contacts-load");
+  contactsStatus.textContent = total === 0 ? "No contacts loaded" : `${total} contacts loaded`;
+  contactsClear.classList.toggle("d-none", total === 0);
+  contactsLoad.classList.toggle("d-none", total !== 0);
 
-    // Template card
-    const template = await templatesModel.get();
-    const templateStatus = document.getElementById('template-status');
-    const templateClear = document.getElementById('template-clear');
-    const templateLoad = document.getElementById('template-load');
-    const templateUpload = document.getElementById('template-upload');
-    const templateEdit = document.getElementById('template-edit');
-    const templateDownload = document.getElementById('template-download');
-    const templateCard = document.getElementById('template-card');
-    const isStarted = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].some(key => template?.[key] || '');
-    const requiredFieldsValid = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'body'].every(key => isValidHandlebars(template?.[key] || ''));
-    const optionalFieldsValid = isValidHandlebarsOptional(template?.recipient_cc || '');
-    const isValid = requiredFieldsValid && optionalFieldsValid;
-    templateStatus.textContent = !isStarted ? 'Template not started' :
-        isValid ? 'Template ready to send' : 'Template started but not complete';
-    templateLoad.classList.toggle('d-none', isStarted);
-    templateDownload.classList.toggle('d-none', !isValid);
-    templateClear.classList.toggle('d-none', !isStarted);
-    templateCard.classList.toggle('disabled', total === 0);
-    templateCard.classList.toggle('opacity-50', total === 0);
+  // Template card
+  const template = await templatesModel.get();
+  const templateStatus = document.getElementById("template-status");
+  const templateClear = document.getElementById("template-clear");
+  const templateLoad = document.getElementById("template-load");
+  const templateUpload = document.getElementById("template-upload");
+  const templateEdit = document.getElementById("template-edit");
+  const templateDownload = document.getElementById("template-download");
+  const templateCard = document.getElementById("template-card");
+  const isStarted = ["sender_name", "sender_email", "subject", "recipient_name", "recipient_email", "body"].some(
+    (key) => template?.[key] || "",
+  );
+  const requiredFieldsValid = [
+    "sender_name",
+    "sender_email",
+    "subject",
+    "recipient_name",
+    "recipient_email",
+    "body",
+  ].every((key) => isValidHandlebars(template?.[key] || ""));
+  const optionalFieldsValid = isValidHandlebarsOptional(template?.recipient_cc || "");
+  const isValid = requiredFieldsValid && optionalFieldsValid;
+  templateStatus.textContent = !isStarted
+    ? "Template not started"
+    : isValid
+      ? "Template ready to send"
+      : "Template started but not complete";
+  templateLoad.classList.toggle("d-none", isStarted);
+  templateDownload.classList.toggle("d-none", !isValid);
+  templateClear.classList.toggle("d-none", !isStarted);
+  templateCard.classList.toggle("disabled", total === 0);
+  templateCard.classList.toggle("opacity-50", total === 0);
 
-    // Sending card
-    const config = await sendingModel.get();
-    const sendBtn = document.getElementById('sending-send');
-    const sendStatus = document.getElementById('sending-send-status');
-    const progressDiv = document.getElementById('sending-progress');
-    const downloadBtn = document.getElementById('sending-download');
-    const pauseBtn = document.getElementById('sending-pause');
-    const stopBtn = document.getElementById('sending-stop');
-    const sendingCard = document.getElementById('sending-card');
-    const isConfigValid = config.apiKey && config.domain;
-    const canSend = total > 0 && isValid && isConfigValid;
-    sendBtn.disabled = !canSend || (sendingState !== 'idle' && sendingState !== 'complete');
-    sendBtn.innerHTML = sendingState === 'sending' ? '<span class="spinner-border spinner-sm"></span> Sending...' : 'Send emails';
-    sendStatus.textContent = !canSend ? 'Disabled: requires contacts, valid template, and Mailgun configuration' :
-        sendingState === 'complete' ? `Sending complete: ${sentCount - failedCount} of ${totalContacts} emails sent` +
-            (failedCount > 0 ? `, ${failedCount} failed (see sending report)` : '') : '';
-    progressDiv.classList.toggle('d-none', sendingState === 'idle');
-    downloadBtn.classList.toggle('d-none', sendingState === 'idle');
-    pauseBtn.textContent = sendingState === 'paused' ? 'Resume' : 'Pause';
-    pauseBtn.classList.toggle('theme-warning', sendingState !== 'paused');
-    pauseBtn.classList.toggle('theme-success', sendingState === 'paused');
-    pauseBtn.classList.toggle('d-none', sendingState === 'complete');
-    stopBtn.classList.toggle('d-none', sendingState === 'complete');
-    sendingCard.classList.toggle('disabled', total === 0 || !isValid);
-    sendingCard.classList.toggle('opacity-50', total === 0 || !isValid);
-    if (sendingState !== 'idle') {
-        document.getElementById('sending-progress-bar').style.width = `${(sentCount / totalContacts) * 100}%`;
-    }
+  // Sending card
+  const config = await sendingModel.get();
+  const sendBtn = document.getElementById("sending-send");
+  const sendStatus = document.getElementById("sending-send-status");
+  const progressDiv = document.getElementById("sending-progress");
+  const downloadBtn = document.getElementById("sending-download");
+  const pauseBtn = document.getElementById("sending-pause");
+  const stopBtn = document.getElementById("sending-stop");
+  const sendingCard = document.getElementById("sending-card");
+  const isConfigValid = config.apiKey && config.domain;
+  const canSend = total > 0 && isValid && isConfigValid;
+  sendBtn.disabled = !canSend || (sendingState !== "idle" && sendingState !== "complete");
+  sendBtn.innerHTML =
+    sendingState === "sending" ? '<span class="spinner-border spinner-sm"></span> Sending...' : "Send emails";
+  sendStatus.textContent = !canSend
+    ? "Disabled: requires contacts, valid template, and Mailgun configuration"
+    : sendingState === "complete"
+      ? `Sending complete: ${sentCount - failedCount} of ${totalContacts} emails sent` +
+        (failedCount > 0 ? `, ${failedCount} failed (see sending report)` : "")
+      : "";
+  progressDiv.classList.toggle("d-none", sendingState === "idle");
+  downloadBtn.classList.toggle("d-none", sendingState === "idle");
+  pauseBtn.textContent = sendingState === "paused" ? "Resume" : "Pause";
+  pauseBtn.classList.toggle("theme-warning", sendingState !== "paused");
+  pauseBtn.classList.toggle("theme-success", sendingState === "paused");
+  pauseBtn.classList.toggle("d-none", sendingState === "complete");
+  stopBtn.classList.toggle("d-none", sendingState === "complete");
+  sendingCard.classList.toggle("disabled", total === 0 || !isValid);
+  sendingCard.classList.toggle("opacity-50", total === 0 || !isValid);
+  if (sendingState !== "idle") {
+    document.getElementById("sending-progress-bar").style.width = `${(sentCount / totalContacts) * 100}%`;
+  }
 }
 
 async function refreshTemplateView() {
-    const template = await templatesModel.get();
-    document.getElementById('template-text').value = template?.body || '';
-    const inputs = {
-        sender_name: document.getElementById('sender_name'),
-        sender_email: document.getElementById('sender_email'),
-        subject: document.getElementById('subject'),
-        recipient_name: document.getElementById('recipient_name'),
-        recipient_email: document.getElementById('recipient_email'),
-        recipient_cc: document.getElementById('recipient_cc')
-    };
-    Object.entries(inputs).forEach(([key, input]) => {
-        input.value = template?.[key] || '';
-    });
+  const template = await templatesModel.get();
+  document.getElementById("template-text").value = template?.body || "";
+  const inputs = {
+    sender_name: document.getElementById("sender_name"),
+    sender_email: document.getElementById("sender_email"),
+    subject: document.getElementById("subject"),
+    recipient_name: document.getElementById("recipient_name"),
+    recipient_email: document.getElementById("recipient_email"),
+    recipient_cc: document.getElementById("recipient_cc"),
+  };
+  Object.entries(inputs).forEach(([key, input]) => {
+    input.value = template?.[key] || "";
+  });
 
-    // Populate column buttons
-    const columns = await contactsModel.getColumns();
-    const columnButtons = document.getElementById('column-buttons');
-    columnButtons.innerHTML = columns.length > 0 ? columns.map(col =>
-        `<button class="btn-outline theme-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`
-    ).join('') : '<p class="fg-secondary">No contact columns available</p>';
+  // Populate column buttons
+  const columns = await contactsModel.getColumns();
+  const columnButtons = document.getElementById("column-buttons");
+  columnButtons.innerHTML =
+    columns.length > 0
+      ? columns
+          .map(
+            (col) =>
+              `<button class="btn-outline theme-secondary btn-sm me-1 column-btn" data-column="${col}">{{${col}}}</button>`,
+          )
+          .join("")
+      : '<p class="fg-secondary">No contact columns available</p>';
 
-    document.querySelectorAll('.mode-select').forEach(select => {
-        const field = select.dataset.field;
-        const input = document.getElementById(field);
-        const currentValue = input.value.match(/^{{(.+)}}$/)?.[1];
-        const isColumn = currentValue && columns.includes(currentValue);
-        let html = '<option value="handlebars">Handlebars</option>';
-        html += columns.map(col =>
-            `<option value="column_${col}" ${col === currentValue ? 'selected' : ''}>Column: ${col}</option>`
-        ).join('');
-        select.innerHTML = html;
-        if (!isColumn) {
-            select.value = 'handlebars';
-        }
-    });
+  document.querySelectorAll(".mode-select").forEach((select) => {
+    const field = select.dataset.field;
+    const input = document.getElementById(field);
+    const currentValue = input.value.match(/^{{(.+)}}$/)?.[1];
+    const isColumn = currentValue && columns.includes(currentValue);
+    let html = '<option value="handlebars">Handlebars</option>';
+    html += columns
+      .map((col) => `<option value="column_${col}" ${col === currentValue ? "selected" : ""}>Column: ${col}</option>`)
+      .join("");
+    select.innerHTML = html;
+    if (!isColumn) {
+      select.value = "handlebars";
+    }
+  });
 
-    const fields = ['sender_name', 'sender_email', 'subject', 'recipient_name', 'recipient_email', 'recipient_cc'];
-    fields.forEach(field => {
-        const input = document.getElementById(field);
-        setFieldValidity(input, fieldError(input.value, field === 'recipient_cc'));
-    });
+  const fields = ["sender_name", "sender_email", "subject", "recipient_name", "recipient_email", "recipient_cc"];
+  fields.forEach((field) => {
+    const input = document.getElementById(field);
+    setFieldValidity(input, fieldError(input.value, field === "recipient_cc"));
+  });
 
-    const bodyInput = document.getElementById('template-text');
-    setFieldValidity(bodyInput, fieldError(bodyInput.value, false));
+  const bodyInput = document.getElementById("template-text");
+  setFieldValidity(bodyInput, fieldError(bodyInput.value, false));
 
-    const { contacts, total } = await contactsModel.getPage(currentContactPage, contactPageSize);
-    const selectorStatus = document.getElementById('contact-selector-status');
-    const pageNumber = document.getElementById('contact-page-number');
-    const pageTotal = document.getElementById('contact-page-total');
-    const randomBtn = document.getElementById('contact-random');
-    const previewContent = document.getElementById('preview-content');
+  const { contacts, total } = await contactsModel.getPage(currentContactPage, contactPageSize);
+  const selectorStatus = document.getElementById("contact-selector-status");
+  const pageNumber = document.getElementById("contact-page-number");
+  const pageTotal = document.getElementById("contact-page-total");
+  const randomBtn = document.getElementById("contact-random");
+  const previewContent = document.getElementById("preview-content");
 
-    if (total === 0) {
-        selectorStatus.textContent = 'No contacts loaded. Preview is not available.';
-        pageNumber.value = '';
-        pageNumber.max = 1;
-        pageNumber.disabled = true;
-        pageTotal.textContent = 'of 0';
-        randomBtn.disabled = true;
-        previewContent.innerHTML = '';
-        currentContact = null;
-    } else {
-        selectorStatus.textContent = '';
-        pageNumber.value = currentContactPage;
-        pageNumber.max = total;
-        pageNumber.disabled = false;
-        pageTotal.textContent = `of ${total}`;
-        randomBtn.disabled = false;
-        currentContact = contacts[0];
-        try {
-            const preview = await templatesModel.render(currentContact);
-            previewContent.innerHTML = `
+  if (total === 0) {
+    selectorStatus.textContent = "No contacts loaded. Preview is not available.";
+    pageNumber.value = "";
+    pageNumber.max = 1;
+    pageNumber.disabled = true;
+    pageTotal.textContent = "of 0";
+    randomBtn.disabled = true;
+    previewContent.innerHTML = "";
+    currentContact = null;
+  } else {
+    selectorStatus.textContent = "";
+    pageNumber.value = currentContactPage;
+    pageNumber.max = total;
+    pageNumber.disabled = false;
+    pageTotal.textContent = `of ${total}`;
+    randomBtn.disabled = false;
+    currentContact = contacts[0];
+    try {
+      const preview = await templatesModel.render(currentContact);
+      previewContent.innerHTML = `
         <p><strong>Sender:</strong> ${preview.sender_name} &lt;${preview.sender_email}&gt;</p>
         <p><strong>Recipient:</strong> ${preview.recipient_name} &lt;${preview.recipient_email}&gt;</p>
-        <p><strong>CC:</strong> ${preview.recipient_cc || '<em>None</em>'}</p>
+        <p><strong>CC:</strong> ${preview.recipient_cc || "<em>None</em>"}</p>
         <p><strong>Subject:</strong> ${preview.subject}</p>
         <p><em>Showing HTML, your email will send as an HTML message</em></p>
         <div><strong>Body:</strong><div>${preview.body}</div></div>
       `;
-        } catch (err) {
-            previewContent.innerHTML = `<div class="alert theme-danger">${escapeHtml(err.message)}</div>`;
-        }
+    } catch (err) {
+      previewContent.innerHTML = `<div class="alert theme-danger">${escapeHtml(err.message)}</div>`;
     }
+  }
 }
 
 async function sendEmails() {
-    const progressBar = document.getElementById('sending-progress-bar');
-    const etaText = document.getElementById('sending-eta');
-    const total = await contactsModel.getCount();
-    sentCount = 0;
-    failedCount = 0;
-    totalContacts = total;
-    const batchSize = Math.min(100, Math.ceil(total / 10)); // Optimize: 100 or 10% of total
+  const progressBar = document.getElementById("sending-progress-bar");
+  const etaText = document.getElementById("sending-eta");
+  const total = await contactsModel.getCount();
+  sentCount = 0;
+  failedCount = 0;
+  totalContacts = total;
+  const batchSize = Math.min(100, Math.ceil(total / 10)); // Optimize: 100 or 10% of total
 
-    const startTime = Date.now();
-    let page = 1;
-    while (sentCount < total && sendingState === 'sending') {
-        const { contacts } = await contactsModel.getPage(page, batchSize);
-        if (contacts.length === 0) break;
+  const startTime = Date.now();
+  let page = 1;
+  while (sentCount < total && sendingState === "sending") {
+    const { contacts } = await contactsModel.getPage(page, batchSize);
+    if (contacts.length === 0) break;
 
-        let results, fatalError = null;
-        try {
-            results = await sendingModel.sendBatch(contacts);
-        } catch (err) {
-            if (!(err instanceof FatalSendError)) throw err;
-            fatalError = err;
-            results = err.results;
-        }
-        // On a fatal error, unattempted contacts have no result and stay unsent
-        for (let i = 0; i < contacts.length; i++) {
-            if (results[i]) await contactsModel.updateContact(contacts[i].id, results[i]);
-        }
-        const attempted = results.filter(Boolean);
-        sentCount += attempted.length;
-        failedCount += attempted.filter(r => r.status.startsWith('failed')).length;
-        if (fatalError) throw fatalError;
-        progressBar.style.width = `${(sentCount / total) * 100}%`;
-        const elapsed = (Date.now() - startTime) / 1000;
-        const eta = ((total - sentCount) * elapsed) / sentCount;
-        etaText.textContent = `ETA: ${Math.round(eta)} seconds` + (failedCount > 0 ? ` (${failedCount} failed)` : '');
-        page++;
-
-        if (sendingState === 'paused') {
-            while (sendingState === 'paused') {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
+    let results,
+      fatalError = null;
+    try {
+      results = await sendingModel.sendBatch(contacts);
+    } catch (err) {
+      if (!(err instanceof FatalSendError)) throw err;
+      fatalError = err;
+      results = err.results;
     }
-
-    if (sendingState !== 'idle') {
-        sendingState = 'complete';
-        await refreshMain();
+    // On a fatal error, unattempted contacts have no result and stay unsent
+    for (let i = 0; i < contacts.length; i++) {
+      if (results[i]) await contactsModel.updateContact(contacts[i].id, results[i]);
     }
+    const attempted = results.filter(Boolean);
+    sentCount += attempted.length;
+    failedCount += attempted.filter((r) => r.status.startsWith("failed")).length;
+    if (fatalError) throw fatalError;
+    progressBar.style.width = `${(sentCount / total) * 100}%`;
+    const elapsed = (Date.now() - startTime) / 1000;
+    const eta = ((total - sentCount) * elapsed) / sentCount;
+    etaText.textContent = `ETA: ${Math.round(eta)} seconds` + (failedCount > 0 ? ` (${failedCount} failed)` : "");
+    page++;
+
+    if (sendingState === "paused") {
+      while (sendingState === "paused") {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  if (sendingState !== "idle") {
+    sendingState = "complete";
+    await refreshMain();
+  }
 }
 
 init();
