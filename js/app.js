@@ -1,7 +1,7 @@
 import ContactsModel from "./models/contacts.js";
 import TemplatesModel from "./models/templates.js";
 import SendingModel, { FatalSendError } from "./models/sending.js";
-import { showError, downloadBlob, escapeHtml } from "./utils.js";
+import { showError, saveFromClick, escapeHtml } from "./utils.js";
 
 const contactsModel = new ContactsModel();
 const templatesModel = new TemplatesModel();
@@ -114,8 +114,7 @@ function setupEventListeners() {
 
   document.getElementById("template-download").addEventListener("click", async () => {
     try {
-      const blob = await templatesModel.exportJSON();
-      downloadBlob(blob, "template.json");
+      await saveFromClick("template.json", { "application/json": [".json"] }, () => templatesModel.exportJSON());
     } catch (err) {
       showError(err.message);
     }
@@ -286,8 +285,7 @@ function setupEventListeners() {
 
   document.getElementById("sending-download").addEventListener("click", async () => {
     try {
-      const blob = await contactsModel.exportCSV();
-      downloadBlob(blob, "report.csv");
+      await saveFromClick("report.csv", { "text/csv": [".csv"] }, () => contactsModel.exportCSV());
     } catch (err) {
       showError(err.message);
     }
