@@ -28,19 +28,23 @@ export function downloadBlob(blob, filename) {
 // picker falls through to downloadBlob.
 export async function saveFromClick(filename, accept, produceBlob) {
   if (typeof window.showSaveFilePicker === "function") {
+    let handle;
     try {
-      const handle = await window.showSaveFilePicker({
+      handle = await window.showSaveFilePicker({
         suggestedName: filename,
         types: [{ accept }],
       });
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      if (!err || (err.name !== "SecurityError" && err.name !== "NotAllowedError")) throw err;
+      handle = null;
+    }
+    if (handle) {
       const blob = await produceBlob();
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
       return;
-    } catch (err) {
-      if (err && err.name === "AbortError") return;
-      if (!err || (err.name !== "SecurityError" && err.name !== "NotAllowedError")) throw err;
     }
   }
   downloadBlob(await produceBlob(), filename);
