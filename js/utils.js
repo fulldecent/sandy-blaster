@@ -14,6 +14,38 @@ export function downloadBlob(blob, filename) {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Chrome drops the download if this URL is revoked in the same turn as click().
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+// The save picker has to be the first wait in the click. Building a large
+// report from IndexedDB takes longer than a click stays valid, and the
+// download is then discarded. Cancel returns without saving. A blocked
+// picker falls through to downloadBlob.
+export async function saveFromClick(filename, accept, produceBlob) {
+  if (typeof window.showSaveFilePicker === "function") {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ accept }],
+      });
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      if (!err || (err.name !== "SecurityError" && err.name !== "NotAllowedError")) throw err;
+      handle = null;
+    }
+    if (handle) {
+      const blob = await produceBlob();
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    }
+  }
+  downloadBlob(await produceBlob(), filename);
 }
